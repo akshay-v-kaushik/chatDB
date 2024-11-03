@@ -1,8 +1,10 @@
+DBMS_OPTIONS = ["mysql", "mongodb"]
+
 MYSQL_CONFIG = {
-    'user': 'your_mysql_username',
-    'password': 'your_mysql_password',
-    'host': 'localhost',
-    'database': 'your_mysql_database'
+    'user': 'root',
+    'password': '1234',
+    'host': 'localhost:3306',
+    'database': 'chatDB'
 }
 
-MONGODB_URI = "mongodb://localhost:27017/"
+MONGODB_URI = "mongodb+srv://avk21:Dildofagit%4047@dscilab3.ibs8k.mongodb.net/"
