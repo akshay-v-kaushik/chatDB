@@ -2,12 +2,9 @@ import sys
 from config import DBMS_OPTIONS
 from db_pusher import DatabasePusher
 from upload.upload import upload_dataset
-
+from explore.explore import explore_database
 
 DBMS_OPTIONS = ["mysql", "mongodb"]
-
-def explore_database(db_type):
-    print(f"Exploring {db_type} databases... [Functionality to be implemented]")
 
 def generate_random_query(db_type):
     print(f"Generating random queries for {db_type}... [Functionality to be implemented]")

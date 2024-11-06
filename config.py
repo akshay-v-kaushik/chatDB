@@ -1,10 +1,15 @@
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
 DBMS_OPTIONS = ["mysql", "mongodb"]
 
 MYSQL_CONFIG = {
-    'user': 'root',
-    'password': '1234',
-    'host': 'localhost:3306',
-    'database': 'chatDB'
+    'user': os.getenv('MYSQL_USER'),
+    'password': os.getenv('MYSQL_PASSWORD'),
+    'host': os.getenv('MYSQL_HOST'),
+    'database': os.getenv('MYSQL_DATABASE')
 }
 
-MONGODB_URI = "mongodb+srv://avk21:Dildofagit%4047@dscilab3.ibs8k.mongodb.net/"
+MONGODB_URI = os.getenv('MONGODB_URI')

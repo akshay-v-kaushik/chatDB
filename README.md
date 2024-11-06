@@ -34,17 +34,15 @@
 
 5. **Set Up Configuration**:
 
-   - Replace the placeholders in the [config.py] file in the project root directory with your actual database information:
+   - Create a [.env] file in the project root directory with the following content, replacing the placeholders with your actual database information:
 
-     ```python
-     MYSQL_CONFIG = {
-         'user': 'your_mysql_username',
-         'password': 'your_mysql_password',
-         'host': 'your_mysql_host',
-         'database': 'your_mysql_database'
-     }
+     ```plaintext
+     MYSQL_USER=your_mysql_username
+     MYSQL_PASSWORD=your_mysql_password
+     MYSQL_HOST=your_mysql_host
+     MYSQL_DATABASE=your_mysql_database
 
-     MONGODB_URI = 'your_mongodb_uri'
+     MONGODB_URI=your_mongodb_uri
      ```
 
 ## How to Run the Project
