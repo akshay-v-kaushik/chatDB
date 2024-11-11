@@ -17,9 +17,9 @@ def validate_dataset(dataset_path):
         return False
     return True
 
-def upload_dataset(pusher, db_type):
+def upload_dataset(pusher, db_type, connections):
     dataset_path = input("Enter the path to the dataset file: ")
     if validate_dataset(dataset_path):
-        pusher.pusher.push_dataset(db_type, dataset_path)
+        pusher.pusher.push_dataset(db_type, dataset_path, connections)
     else:
         print("Dataset validation failed.")

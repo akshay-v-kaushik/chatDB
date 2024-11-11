@@ -1,52 +1,37 @@
 import pandas as pd
-from sqlalchemy import create_engine, inspect
-import pymongo
+from sqlalchemy import inspect
 import config
+from utils.common import select_table_or_collection
 
-def explore_database(db_type):
+def explore_database(db_type, connections):
     if db_type == 'mysql':
-        explore_mysql()
+        explore_mysql(connections[0])
     elif db_type == 'mongodb':
-        explore_mongodb()
+        explore_mongodb(connections[1])
     else:
-        print("Unsupported db_Stype. Use 'mysql' or 'mongodb'.")
+        print("Unsupported db_type. Use 'mysql' or 'mongodb'.")
 
-def explore_mysql():
-    connection_string = f"mysql+pymysql://{config.MYSQL_CONFIG['user']}:{config.MYSQL_CONFIG['password']}@{config.MYSQL_CONFIG['host']}/{config.MYSQL_CONFIG['database']}"
-    engine = create_engine(connection_string)
-    inspector = inspect(engine)
+def explore_mysql(connection):
+    inspector = inspect(connection)
     
-    tables = inspector.get_table_names()
-    print("Tables in MySQL database:")
-    for idx, table in enumerate(tables, start=1):
-        print(f"{idx}. {table}")
-    
-    choice = int(input("Select a table to view metadata and contents: ")) - 1
-    if 0 <= choice < len(tables):
-        table_name = tables[choice]
+    table_name = select_table_or_collection('mysql')
+    if table_name:
         print(f"\nMetadata for table '{table_name}':")
         columns = inspector.get_columns(table_name)
         for column in columns:
             print(f"{column['name']} \t {column['type']}")
         
-        df = pd.read_sql_table(table_name, engine)
+        df = pd.read_sql_table(table_name, connection)
         print(f"\nContents of table '{table_name}':")
         print(df.head())
     else:
         print("Invalid selection.")
 
-def explore_mongodb():
-    client = pymongo.MongoClient(config.MONGODB_URI)
-    db = client[config.MYSQL_CONFIG['database']]
+def explore_mongodb(connection):
+    db = connection[config.MYSQL_CONFIG['database']]
     
-    collections = db.list_collection_names()
-    print("Collections in MongoDB database:")
-    for idx, collection in enumerate(collections, start=1):
-        print(f"{idx}. {collection}")
-    
-    choice = int(input("Select a collection to view metadata and contents: ")) - 1
-    if 0 <= choice < len(collections):
-        collection_name = collections[choice]
+    collection_name = select_table_or_collection('mongodb')
+    if collection_name:
         print(f"\nMetadata for collection '{collection_name}':")
         sample_doc = db[collection_name].find_one()
         if sample_doc:
