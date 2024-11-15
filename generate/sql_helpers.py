@@ -1,5 +1,6 @@
 import random
-from datetime import timedelta
+from .templates import query_templates
+from prettytable import PrettyTable
 
 # Helper function to select column based on type group (handles '/' options)
 def select_column_type_group(col_type_group, table_info):
@@ -45,21 +46,6 @@ def get_date_range_for_column(table_info, column):
         end_date = table_info['date'][column]['latest']
         return (start_date, end_date)
     return None
-
-def random_number(min_val, max_val): 
-    if isinstance(min_val, int) and isinstance(max_val, int):
-        # Return an integer within the range
-        return random.randint(min_val, max_val)
-    elif isinstance(min_val, float) or isinstance(max_val, float):
-        # Return a decimal within the range
-        return random.uniform(min_val, max_val)
-    else:
-        raise ValueError("min_val and max_val must be either int or float")
-
-def random_date(start_date, end_date):
-    delta = end_date - start_date
-    random_days = random.randint(0, delta.days)
-    return start_date + timedelta(days=random_days)
 
 def gather_metrics(connection, table_name):
     raw_connection = connection.raw_connection()
@@ -111,3 +97,62 @@ def gather_metrics(connection, table_name):
 
     cursor.close()
     return table_info
+
+# Select a random query and generate based on types
+def get_random_sql(table_name, table_info):
+    query_template = random.choice(query_templates)
+    query_lambda = query_template[0]
+    required_column_types = query_template[1] if len(query_template) > 1 else ['any']
+    
+    # Determine if multiple columns are required
+    if 'columns' in query_lambda.__code__.co_varnames:
+        columns = []
+        for col_type_group in required_column_types:
+            selected_type = select_column_type_group(col_type_group, table_info)
+            if selected_type:
+                columns.append(selected_type)
+            else:
+                return "No suitable column found.", "No suitable column found for this query template."
+
+        # Handle additional parameters if needed
+        additional_param = get_additional_param(query_lambda, table_info, columns[1] if len(columns) > 1 else columns[0])
+        query, description = query_lambda(table_name, columns, additional_param) if additional_param else query_lambda(table_name, columns)
+    
+    else:
+        # Single-column templates
+        selected_type = select_column_type_group(required_column_types[0], table_info)
+        if not selected_type:
+            return "No suitable column found.", "No suitable column found for this query template."
+
+        additional_param = get_additional_param(query_lambda, table_info, selected_type)
+        query, description = query_lambda(table_name, selected_type, additional_param) if additional_param else query_lambda(table_name, selected_type)
+    
+    ### add randomly limit to the query (10)
+
+    return query, description
+
+from prettytable import PrettyTable
+
+def execute_and_print_query(connection, query):
+    try:
+        raw_connection = connection.raw_connection()
+        cursor = raw_connection.cursor()
+
+        cursor.execute(query)
+
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        rows = cursor.fetchall()
+
+        table = PrettyTable()
+        table.field_names = columns  # Set column headers
+        table.align = "l"  # Left-align the content
+
+        for row in rows:
+            table.add_row(row)
+
+        print(table)
+
+        print(f"\n{len(rows)} row(s) in set")
+
+    except Exception as err:
+        print(f"Error: {err}")

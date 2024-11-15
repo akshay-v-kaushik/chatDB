@@ -1,5 +1,20 @@
-from .sql_helpers import random_number, random_date
+import random
+from datetime import timedelta
 
+def random_number(min_val, max_val): 
+    if isinstance(min_val, int) and isinstance(max_val, int):
+        # Return an integer within the range
+        return random.randint(min_val, max_val)
+    elif isinstance(min_val, float) or isinstance(max_val, float):
+        # Return a decimal within the range
+        return random.uniform(min_val, max_val)
+    else:
+        raise ValueError("min_val and max_val must be either int or float")
+
+def random_date(start_date, end_date):
+    delta = end_date - start_date
+    random_days = random.randint(0, delta.days)
+    return start_date + timedelta(days=random_days)
 
 query_templates = [
     # Simple Selects
@@ -12,8 +27,8 @@ query_templates = [
     # Multi-Column Queries
     (lambda table, columns: (f"SELECT {columns[0]}, {columns[1]} FROM {table};", f"Selects the first 5 rows of columns '{columns[0]}' and '{columns[1]}' from '{table}'."), ['any', 'any']),
     (lambda table, columns: (f"SELECT {columns[0]}, {columns[1]} FROM {table} ORDER BY {columns[1]} DESC;", f"Selects '{columns[0]}' and '{columns[1]}' ordered by '{columns[1]}' in descending order, limiting to 5 rows."), ['categorical/others/any', 'numeric']),
-    (lambda table, columns, min_max: (f"SELECT {columns[0]}, {columns[1]} FROM {table} WHERE {columns[1]} > {random_number(*min_max)};", f"Selects '{columns[0]}' and '{columns[1]}' where '{columns[1]}' is greater than a random value, limited to 10 results."), ['categorical/others/any', 'numeric/date']),
-    (lambda table, columns: (f"SELECT {columns[0]}, {columns[1]} FROM {table} ORDER BY {columns[0]} DESC, {columns[1]} ASC;", f"Selects '{columns[0]}' and '{columns[1]}' ordered by '{columns[0]}' descending and '{columns[1]}' ascending, limited to 5 rows."), ['categorical/others', 'numeric/date']),
+    (lambda table, columns, min_max: (f"SELECT {columns[0]}, {columns[1]} FROM {table} WHERE {columns[1]} > {random_number(*min_max)};", f"Selects '{columns[0]}' and '{columns[1]}' where '{columns[1]}' is greater than a random value, limited to 10 results."), ['others/any', 'numeric/date']),
+    (lambda table, columns: (f"SELECT {columns[0]}, {columns[1]} FROM {table} ORDER BY {columns[0]} DESC, {columns[1]} ASC;", f"Selects '{columns[0]}' and '{columns[1]}' ordered by '{columns[0]}' descending and '{columns[1]}' ascending, limited to 5 rows."), ['any/others', 'numeric/date']),
 
     # Aggregate Functions (SUM, AVG, MIN, MAX)
     (lambda table, column: (f"SELECT SUM({column}) FROM {table};", f"Calculates the sum of all values in the column '{column}' from the table '{table}'."), ['numeric']),
@@ -62,7 +77,7 @@ query_templates = [
     # # Subqueries
     (lambda table, column: (f"SELECT {column} FROM {table} WHERE {column} = (SELECT MAX({column}) FROM {table});", f"Selects rows from '{table}' where '{column}' equals the maximum value of the column."), ['numeric']),
     (lambda table, column: (f"SELECT {column} FROM {table} WHERE {column} = (SELECT MIN({column}) FROM {table});", f"Selects rows from '{table}' where '{column}' equals the minimum value of the column."), ['numeric']),
-    (lambda table, column, min_max: (f"SELECT {column} FROM {table} WHERE {column} = (SELECT AVG({column}) FROM {table} WHERE {column} BETWEEN {random_number(*min_max)} AND {random_number(*min_max)});", f"Selects rows from '{table}' where '{column}' is equal to the average of the column within a random range."), ['numeric']),
+    (lambda table, column, min_max: (f"SELECT {column} FROM {table} WHERE {column} > (SELECT AVG({column}) FROM {table} WHERE {column} BETWEEN {random_number(*min_max)} AND {random_number(*min_max)});", f"Selects rows from '{table}' where '{column}' is equal to the average of the column within a random range."), ['numeric']),
 
     # Aggregates with Multiple Columns
     (lambda table, columns: (f"SELECT {columns[0]}, AVG({columns[1]}) FROM {table} GROUP BY {columns[0]};", f"Groups by '{columns[0]}' and calculates the average of '{columns[1]}'."), ['categorical/others', 'numeric']),
