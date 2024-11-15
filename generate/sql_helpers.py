@@ -46,8 +46,6 @@ def get_date_range_for_column(table_info, column):
         return (start_date, end_date)
     return None
 
-
-
 def random_number(min_val, max_val): 
     if isinstance(min_val, int) and isinstance(max_val, int):
         # Return an integer within the range
@@ -62,3 +60,54 @@ def random_date(start_date, end_date):
     delta = end_date - start_date
     random_days = random.randint(0, delta.days)
     return start_date + timedelta(days=random_days)
+
+def gather_metrics(connection, table_name):
+    raw_connection = connection.raw_connection()
+    cursor = raw_connection.cursor()
+    
+    # Step 1: Fetch column names, data types, and total rows in the table
+    cursor.execute(f"SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.columns WHERE table_name = '{table_name}';")
+    schema = cursor.fetchall()
+    cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
+    total_rows = cursor.fetchone()[0]
+    
+    # Structure to store column information
+    table_info = {
+        'numeric': {},
+        'categorical': {},
+        'date': {},
+        'others': [] 
+    }
+    numeric_types = ['int', 'bigint', 'float', 'double', 'decimal']
+    prop_map = {}
+
+    # Step 2: Collect additional information for each column based on its type
+    for column, data_type in schema:
+        cursor.execute(f"SELECT COUNT(DISTINCT {column}) FROM {table_name};")
+        
+        unique_values_count = cursor.fetchone()[0]
+        
+        unique_value_proportion = unique_values_count / total_rows if total_rows > 0 else 0
+        prop_map[column] = unique_value_proportion
+
+        if ("id" in column.lower() or "key" in column.lower() or
+            unique_values_count == 1 or
+            (unique_value_proportion >= 0.75 and data_type not in numeric_types)):
+            table_info['others'].append(column)
+            continue
+
+        if data_type in numeric_types and unique_value_proportion >= 0.2:
+            cursor.execute(f"SELECT MIN({column}), MAX({column}) FROM {table_name};")
+            min_value, max_value = cursor.fetchone()
+            table_info['numeric'][column] = {'min': min_value, 'max': max_value}
+        elif 'date' in data_type or 'time' in data_type:
+            cursor.execute(f"SELECT MIN({column}), MAX({column}) FROM {table_name};")
+            earliest, latest = cursor.fetchone()
+            table_info['date'][column] = {'earliest': earliest, 'latest': latest}
+        else:
+            cursor.execute(f"SELECT DISTINCT {column} FROM {table_name};")
+            unique_values = [row[0] for row in cursor.fetchall()]
+            table_info['categorical'][column] = {'unique_values': unique_values}
+
+    cursor.close()
+    return table_info
