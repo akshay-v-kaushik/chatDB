@@ -1,5 +1,5 @@
 import random
-from .templates import query_templates
+from .sql_templates import query_templates
 from prettytable import PrettyTable
 
 # Helper function to select column based on type group (handles '/' options)
