@@ -2,7 +2,9 @@ import pandas as pd
 from sqlalchemy import inspect
 import config
 from utils.common import select_table_or_collection
-
+from pprintpp import pprint
+from generate.mongo_helpers import gather_mongo_metrics
+from generate.sql_helpers import gather_sql_metrics
 def explore_database(db_type, connections):
     if db_type == 'mysql':
         explore_mysql(connections[0])
@@ -24,6 +26,8 @@ def explore_mysql(connection):
         df = pd.read_sql_table(table_name, connection)
         print(f"\nContents of table '{table_name}':")
         print(df.head())
+        table_info = gather_sql_metrics(connection, table_name)
+        pprint(table_info)
     else:
         print("Invalid selection.")
 
@@ -41,5 +45,7 @@ def explore_mongodb(connection):
         df = pd.DataFrame(list(db[collection_name].find()))
         print(f"\nContents of collection '{collection_name}':")
         print(df.head())
+        collection_info = gather_mongo_metrics(connection, collection_name)
+        pprint(collection_info)
     else:
         print("Invalid selection.")
