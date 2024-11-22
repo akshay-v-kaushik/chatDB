@@ -5,7 +5,7 @@
 1. **Clone the Repository**:
 
    ```sh
-   git clone https://github.com/yourusername/chatDB.git
+   git clone https://github.com/akshay-v-kaushik/chatDB.git
    cd chatDB
    ```
 
