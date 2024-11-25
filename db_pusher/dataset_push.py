@@ -42,8 +42,8 @@ class DatasetPusher:
                     dtype_mapping[column] = types.DATE
             elif 'time' in column.lower():
                 # Convert to TIME if the column contains only time values
-                if len(df[column].dropna().astype(str).iloc[0]) < 10:
-                    df[column] = pd.to_datetime(df[column], format='%H:%M:%S', errors='coerce').dt.time
+                if len(df[column].dropna().astype(str).iloc[0]) < 12:
+                    df[column] = pd.to_datetime(df[column], format='%I:%M:%S %p', errors='coerce')
                     dtype_mapping[column] = types.TIME
                 else:
                     df[column] = pd.to_datetime(df[column], errors='coerce')

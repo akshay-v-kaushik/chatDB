@@ -133,15 +133,15 @@ query_templates = [
          ]}
     ), ['categorical', 'others']),
     (lambda collection, columns, min_max: (
-        f"db.{collection}.aggregate([{{ $match: {{ {columns[0]}: {{ $lt: {random_val} }} }} }}, {{ $project: {{ {columns[1]}: 1, _id: 0 }} }}, {{ $sort: {{ {columns[0]}: 1 }} }}])",
-        f"Filters documents where '{columns[0]}' is less than a random value, projects only the '{columns[1]}' field, and sorts in ascending order.",
+        f"db.{collection}.aggregate([{{ $match: {{ {columns[1]}: {{ $lt: {random_val} }} }} }}, {{ $project: {{ {columns[0]}: 1, _id: 0 }} }}, {{ $sort: {{ {columns[1]}: 1 }} }}])",
+        f"Filters documents where '{columns[1]}' is less than a random value, projects only the '{columns[0]}' field, and sorts in ascending order.",
         {"method": "aggregate",
          "pipeline": [
-             {"$match": {columns[0]: {"$lt": random_val}}},
-             {"$project": {columns[1]: 1, "_id": 0}},
-             {"$sort": {columns[0]: 1}}
+             {"$match": {columns[1]: {"$lt": random_val}}},
+             {"$project": {columns[0]: 1, "_id": 0}},
+             {"$sort": {columns[1]: 1}}
          ]}
-    ) if (random_val := random_number(*min_max)) else None, ['numeric', 'others']),
+    ) if (random_val := random_number(*min_max)) else None, [ 'others', 'numeric']),
     (lambda collection, columns: (
         f"db.{collection}.aggregate([{{ $group: {{ _id: {{ field1: '${columns[0]}', field2: '${columns[1]}' }}, count: {{ $sum: 1 }} }} }}, {{ $sort: {{ count: -1 }} }}])",
         f"Groups documents by the combination of '{columns[0]}' and '{columns[1]}', and counts the number of documents in each group, sorted by count in descending order.",

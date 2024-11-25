@@ -1,3 +1,4 @@
+import inspect
 import random
 import config
 from .mongo_templates import query_templates
@@ -23,7 +24,7 @@ def select_column(collection_info, column_type):
     elif column_type == 'date' and 'date' in collection_info:
         return random.choice(list(collection_info['date'].keys()))
     elif column_type == 'any':
-        all_columns = list(collection_info['numeric'].keys()) + list(collection_info['categorical'].keys()) + list(collection_info['date'].keys() + list(collection_info['others']))
+        all_columns = list(collection_info['numeric'].keys()) + list(collection_info['categorical'].keys()) + list(collection_info['date'].keys()) + list(collection_info['others'])
         return random.choice(all_columns) if all_columns else None
     elif column_type == 'others':
         return random.choice(collection_info['others']) if collection_info['others'] else None
@@ -66,18 +67,32 @@ def get_random_mongo(collection_name, collection_info):
             # Determine if multiple columns are required
             if 'columns' in query_lambda.__code__.co_varnames:
                 columns = []
+                selected_columns = set()  # Track selected columns to avoid duplicates
+
                 for col_type_group in required_column_types:
-                    selected_type = select_column_type_group(col_type_group, collection_info)
-                    if selected_type:
-                        columns.append(selected_type)
-                    else:
-                        raise ValueError("No suitable column found for this type group.")
-                
+                    max_retries = 5  # Set a retry limit to prevent infinite loops
+                    retries = 0
+
+                    while retries < max_retries:
+                        selected_type = select_column_type_group(col_type_group, collection_info)
+
+                        if selected_type and selected_type not in selected_columns:
+                            columns.append(selected_type)
+                            selected_columns.add(selected_type)
+                            break
+                        retries += 1
+
+                    if retries == max_retries:
+                        raise ValueError("Could not find a unique column for this type group.")
+
                 # Handle additional parameters if needed
                 additional_param = get_additional_param(
                     query_lambda, collection_info, 
                     columns[1] if len(columns) > 1 else columns[0]
                 )
+                # lambda_source = inspect.getsource(query_lambda)
+                # print("query_lambda source code:")
+                # print(lambda_source)
                 query, description, query_obj = (
                     query_lambda(collection_name, columns, additional_param)
                     if additional_param else query_lambda(collection_name, columns)
@@ -90,6 +105,10 @@ def get_random_mongo(collection_name, collection_info):
                     raise ValueError("No suitable column found for this type group.")
 
                 additional_param = get_additional_param(query_lambda, collection_info, selected_type)
+                
+                # lambda_source = inspect.getsource(query_lambda)
+                # print("query_lambda source code:")
+                # print(lambda_source)
                 query, description, query_obj = (
                     query_lambda(collection_name, selected_type, additional_param)
                     if additional_param else query_lambda(collection_name, selected_type)
@@ -136,12 +155,12 @@ def gather_mongo_metrics(connection, collection_name):
         prop_map[column] = unique_value_proportion
 
         # Skip certain fields or handle them as 'others'
-        if (("id" in column.lower() or unique_values_count == 1) and type(value) not in numeric_types):
+        if ("id" in column.lower() or unique_values_count == 1):
             collection_info['others'].append(column)
             continue
 
         # Numeric columns
-        if (type(value) in numeric_types and unique_value_proportion >= config.NUMERIC_UNIQUE) or (isinstance(value, str) and len(value) >= 1 and value[0].isdigit() and "-" not in value and unique_value_proportion >= config.NUMERIC_UNIQUE):
+        if (type(value) in numeric_types and ("price" in column.lower() or "qty" in column.lower() or "quantity" in column.lower() or unique_value_proportion >= config.NUMERIC_UNIQUE)) or (isinstance(value, str) and len(value) >= 1 and value[0].isdigit() and "-" not in value and unique_value_proportion >= config.NUMERIC_UNIQUE):
             min_value = collection.find_one({column: { "$type": ["int", "long", "double", "decimal"], "$not": { "$eq": float('NaN') }}}, {column: 1, "_id": 0}, sort=[(column, 1)])[column]
             max_value = collection.find_one({column: { "$type": ["int", "long", "double", "decimal"], "$not": { "$eq": float('NaN') } }}, {column: 1, "_id": 0}, sort=[(column, -1)])[column]
             collection_info['numeric'][column] = {'min': min_value, 'max': max_value}
@@ -187,9 +206,9 @@ def execute_and_print_mongo(connection, query_object, collection_name):
             raise ValueError(f"Unsupported query method: {method}")
 
         # Print the results
-        if len(result) > 30:
-            print("Showing the first 15 rows:")
-            pprint(result[:10])  # Print the first 10 rows
+        if len(result) > 15:
+            print("Showing the first 7 rows:")
+            pprint(result[:7])  # Print the first 10 rows
             print(f"Total number of rows: {len(result)}")
         else:
             pprint(result)  # Print all rows

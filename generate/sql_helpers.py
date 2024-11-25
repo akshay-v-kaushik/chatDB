@@ -1,3 +1,4 @@
+import inspect
 import config
 import random
 from .sql_templates import query_templates
@@ -15,14 +16,14 @@ def select_column_type_group(col_type_group, table_info):
 
 # Select column based on specified type
 def select_column(table_info, column_type):
-    if column_type == 'numeric' and 'numeric' in table_info:
+    if column_type == 'numeric' and 'numeric' in table_info and table_info['numeric']:
         return random.choice(list(table_info['numeric'].keys()))
-    elif column_type == 'categorical' and 'categorical' in table_info:
+    elif column_type == 'categorical' and 'categorical' in table_info and table_info['categorical']:
         return random.choice(list(table_info['categorical'].keys()))
-    elif column_type == 'date' and 'date' in table_info:
-        return random.choice(list(table_info['date'].keys()))
+    elif column_type == 'date' and 'date' in table_info and table_info['date']:
+        return random.choice(list(table_info['date'].keys()) if table_info['date'].keys() else [])
     elif column_type == 'any':
-        all_columns = list(table_info['numeric'].keys()) + list(table_info['categorical'].keys()) + list(table_info['date'].keys()) + list(table_info['others'])
+        all_columns = list(table_info['numeric'].keys()) if table_info['numeric'].keys() else [] + list(table_info['categorical'].keys()) if table_info['categorical'].keys() else []+ list(table_info['date'].keys()) if table_info['date'].keys() else [] + list(table_info['others'])
         return random.choice(all_columns) if all_columns else None
     elif column_type == 'others':
         return random.choice(table_info['others']) if table_info['others'] else None
@@ -34,8 +35,14 @@ def get_additional_param(query_lambda, table_info, column):
         return get_min_max_for_column(table_info, column)
     elif "date_range" in query_lambda.__code__.co_varnames:
         return get_date_range_for_column(table_info, column)
+    elif "unique_values" in query_lambda.__code__.co_varnames:
+        return get_unique_values_for_column(table_info, column)
     return None
 
+def get_unique_values_for_column(table_info, column):
+    if column in table_info['categorical']:
+        return table_info['categorical'][column]['unique_values']
+    return None
 def get_min_max_for_column(table_info, column):
     if column in table_info['numeric']:
         min_val = table_info['numeric'][column]['min']
@@ -65,18 +72,33 @@ def get_random_sql(table_name, table_info):
             # Determine if multiple columns are required
             if 'columns' in query_lambda.__code__.co_varnames:
                 columns = []
+                selected_columns = set()  # Track selected columns to avoid duplicates
+
                 for col_type_group in required_column_types:
-                    selected_type = select_column_type_group(col_type_group, table_info)
-                    if selected_type:
-                        columns.append(selected_type)
-                    else:
-                        raise ValueError("No suitable column found for this type group.")
-                
+                    max_retries = 5  # Set a retry limit to prevent infinite loops
+                    retries = 0
+
+                    while retries < max_retries:
+                        selected_type = select_column_type_group(col_type_group, table_info)
+
+                        if selected_type and selected_type not in selected_columns:
+                            columns.append(selected_type)
+                            selected_columns.add(selected_type)
+                            break
+                        retries += 1
+
+                    if retries == max_retries:
+                        raise ValueError("Could not find a unique column for this type group.")
+
                 # Handle additional parameters if needed
                 additional_param = get_additional_param(
                     query_lambda, table_info, 
                     columns[1] if len(columns) > 1 else columns[0]
                 )
+                
+                # lambda_source = inspect.getsource(query_lambda)
+                # print("query_lambda source code:")
+                # print(lambda_source)
                 query, description = (
                     query_lambda(table_name, columns, additional_param)
                     if additional_param else query_lambda(table_name, columns)
@@ -89,6 +111,10 @@ def get_random_sql(table_name, table_info):
                     raise ValueError("No suitable column found for this type group.")
 
                 additional_param = get_additional_param(query_lambda, table_info, selected_type)
+                
+                # lambda_source = inspect.getsource(query_lambda)
+                # print("query_lambda source code:")
+                # print(lambda_source)
                 query, description = (
                     query_lambda(table_name, selected_type, additional_param)
                     if additional_param else query_lambda(table_name, selected_type)
@@ -136,12 +162,12 @@ def gather_sql_metrics(connection, table_name):
 
         prop_map[column] = unique_value_proportion
 
-        if (("id" in column.lower()  or
-            unique_values_count == 1) and data_type not in numeric_types):
+        if ("id" in column.lower()  or
+            unique_values_count == 1):
             table_info['others'].append(column)
             continue
 
-        if data_type in numeric_types and unique_value_proportion >= config.NUMERIC_UNIQUE:
+        if data_type in numeric_types and ("price" in column.lower() or "qty" in column.lower() or "quantity" in column.lower() or unique_value_proportion >= config.NUMERIC_UNIQUE):
             cursor.execute(f"SELECT MIN(`{column}`), MAX(`{column}`) FROM {table_name};")
             min_value, max_value = cursor.fetchone()
             table_info['numeric'][column] = {'min': min_value, 'max': max_value}
