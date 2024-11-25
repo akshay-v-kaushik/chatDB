@@ -3,12 +3,12 @@ from db_pusher import DatabasePusher
 from upload.upload import upload_dataset
 from explore.explore import explore_database
 from generate.generate_queries import generate_random_query
-from utils.common import get_db_type
+from utils.common import get_db_type, select_table_or_collection
 from utils.connect import DatabaseConnector
 from drop.drop import delete_dataset
-
-def natural_language_query(db_type):
-    print(f"Handling natural language query for {db_type}... [Functionality to be implemented]")
+from ask.ask_branch import branch_ask
+def natural_language_query(db_type, name):
+    branch_ask(db_type, name)
 
 # helper function to exit the program
 def exit_program():
@@ -44,7 +44,8 @@ def main():
             generate_random_query(db_type, connections.connections)
         elif choice == "4":
             db_type = get_db_type()
-            natural_language_query(db_type)
+            name = select_table_or_collection(db_type)
+            natural_language_query(db_type, name)
         elif choice == "5":
             db_type = get_db_type()
             delete_dataset(db_type, connections.connections)
