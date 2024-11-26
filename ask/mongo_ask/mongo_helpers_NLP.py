@@ -117,9 +117,9 @@ def gather_metrics(db, collection_name):
         # Categorical columns
         else:
             collection_info['categorical'][column] = {'unique_values': unique_values}
-            if re.search(r'(location|store|branch)', column.lower()):
-                    KNOWN_STORE_LOCATIONS.update({v.lower(): v for v in unique_values})
-
+            if re.search(r'(location|branch)', column.lower()):
+                    KNOWN_STORE_LOCATIONS.update({v.lower(): v for v in unique_values}, )
+                    
     return collection_info
 
 # def gather_metrics(db, collection_name):

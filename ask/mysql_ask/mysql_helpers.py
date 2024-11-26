@@ -34,7 +34,7 @@ def gather_metrics(connection, table_name):
     global FIELD_MAPPING, KNOWN_STORE_LOCATIONS  # Ensure globals are updated
     
     # Define patterns or keywords for detecting location-related columns
-    location_patterns = re.compile(r"(location|branch|store|area|city)", re.IGNORECASE)
+    location_patterns = re.compile(r"(location|branch|area|city)", re.IGNORECASE)
 
     try:
         cursor = connection.cursor()
@@ -47,7 +47,7 @@ def gather_metrics(connection, table_name):
        #### INTEGRATION: CHANGE DSCI TO CONFIG DB 
         cursor.execute(
             "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.columns WHERE table_name = %s and table_schema = %s;",
-            (table_name,'dsci')
+            (table_name,'dsci4')
         )
         schema = cursor.fetchall()
         # print(f"Schema fetched: {schema}")
@@ -97,8 +97,7 @@ def gather_metrics(connection, table_name):
                     cursor.execute(f"SELECT DISTINCT {column} FROM {table_name};")
                     locations = [row[0] for row in cursor.fetchall()]
                     # print(f"Locations detected in column {column}: {locations}")
-                    ## TO BE REMOVED
-                    # table_info['categorical'][column] = {'unique_values': locations}
+                    table_info['categorical'][column] = {'unique_values': locations}
                     KNOWN_STORE_LOCATIONS.update({str(loc).lower(): str(loc) for loc in locations if isinstance(loc, str)})
                     FIELD_MAPPING['store_location'] = column  # Map the detected column for location-related queries
                 except Exception as e:

@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import nltk
 from nltk.tokenize import word_tokenize
@@ -46,26 +47,30 @@ def parse_query_nltk(user_input, table_info):
 
             if pattern_key == "specific_product_sales":
                 product = match.group(1)  # Extract product name
-                # print(product)
+                print(product)
                 db_field = None
                 for key, value in table_info["categorical"].items():
                     if product.lower() in [v.lower() for v in value['unique_values']]:
                         db_field = key
                         break
+                    print(key, value)
                 if db_field is None:
                     return None, f"Product '{product}' not found in the database. Please try another product."
                 # Replace placeholders in the query
                 mongodb_query = []
+                match_stage = {"$match": {db_field: product}}
+
                 pipeline_json = json.dumps(pattern_details["mongodb"])  # Convert to JSON string for safe replacement
                 pipeline_json = pipeline_json.replace("{GROUP_FIELD}", db_field)  # Replace placeholder
                 updated_pipeline = json.loads(pipeline_json)
-                mongodb_query = updated_pipeline
+                # Insert the $match stage at the beginning of the pipeline
+                mongodb_query = [match_stage] + updated_pipeline
                 # print(mongodb_query)
                 description = pattern_details["description"].format(product=product)
                 return mongodb_query, description
             
 
-            elif pattern_key == "top_best_selling_products" or pattern_key == "top_least_sellling_products":
+            elif pattern_key == "top_best_selling_products" or pattern_key == "top_least_selling_products":
                 limit = int(match.group(1))  # Extract the limit (e.g., top 5)
                 product = match.group(2)  # Extract the product field
                 db_field = FIELD_MAPPING.get(product)
@@ -88,7 +93,7 @@ def parse_query_nltk(user_input, table_info):
                 
                 return mongodb_query, description
 
-            elif pattern_key == "top_most_streamed_songs" or pattern_key == "top_least_streamed_tracks":
+            elif pattern_key == "top_most_streamed_songs" or pattern_key == "top_least_streamed_songs":
                 limit = int(match.group(2))  # Extract the limit (e.g., top 5)
                 stream = match.group(4)  # Extract the product field
                 db_field = FIELD_MAPPING.get(stream)
@@ -110,43 +115,64 @@ def parse_query_nltk(user_input, table_info):
                 description = pattern_details["description"].format(limit=limit)
                 
                 return mongodb_query, description
+            
+            
 
             # TODO: GET THIS WORKING
             elif pattern_key == "total_sales_by_date":
-                time_phrase = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", match.group(3))  # Clean ordinal suffixes
-                query_type = match.group(1).lower()  # Extract "total sales", "songs released", or "tracks released"
+                raw_date = match.group(2).strip()  # Extract the date string from user input
+                normalized_date = normalize_date(raw_date)
+                
+                try:
+                    year = int(raw_date)  # Try extracting the year from input (e.g., "2023")
+                except ValueError:
+                    year = None
 
-                # Determine whether to use sales or songs SQL
-                if query_type in ["total sales"]:
-                    sql_key = "specific_date_sales"
-                    count_sql_key = "month_sales"
-                    year_sql_key = "year_sales"
-                else:
-                    sql_key = "specific_date_tracks"
-                    count_sql_key = "month_tracks"
-                    year_sql_key = "year_tracks"
-
-                # Check for specific date format (YYYY-MM-DD)
-                if re.match(r"\d{4}-\d{2}-\d{2}", time_phrase):  # Match specific date format
-                    query = pattern_details["sql"][sql_key].format(specific_date=time_phrase)
-                    description = f"This query retrieves the {query_type} on {time_phrase}."
-                    return query, description
-
-                # Specific date query with natural language (e.g., "January 1st")
-                normalized_date = normalize_date(time_phrase)
-                if normalized_date:
-                    mongodb_query = [
-                        {"$match": {"transaction_date": normalized_date}},
-                        {"$group": {
-                            "_id": None,
-                            "total_sales": {"$sum": {"$multiply": [
-                                f"${FIELD_MAPPING.get('quantity', 'quantity')}",
-                                f"${FIELD_MAPPING.get('price', 'price')}"
-                            ]}}
-                        }}
-                    ]
-                    description = f"This query retrieves the total sales on {normalized_date}."
+                if normalized_date:  # Specific date
+                    pipeline_json = json.dumps(pattern_details["mongodb"]["specific_date"])  # Specific date pipeline
+                    pipeline_json = pipeline_json.replace("date_field", FIELD_MAPPING["date"])  # Replace date_field
+                    pipeline_json = pipeline_json.replace("specific_date", normalized_date)  # Replace specific_date
+                    updated_pipeline = json.loads(pipeline_json)
+                    mongodb_query = updated_pipeline
+                    description = pattern_details["description"].format(date=raw_date)
                     return mongodb_query, description
+
+                else:
+                    # Check for month and year patterns
+                    month, year = None, year
+                    try:
+                        if "," in raw_date:  # Example: "January, 2023"
+                            month, year = raw_date.split(",")
+                            month = datetime.strptime(month.strip(), "%B").month  # Convert month name to number
+                            year = int(year.strip())
+                        elif raw_date.isdigit():  # Example: "2023" (only year)
+                            year = int(raw_date)
+                    except Exception:
+                        pass  # Parsing failed; fallback to error handling
+
+                    if month and year:  # Month and year provided
+                            pipeline_json = json.dumps(pattern_details["mongodb"]["month"])  # Month pipeline
+                            pipeline_json = pipeline_json.replace("date_field", FIELD_MAPPING["date"])  # Replace date_field
+                            pipeline_json = pipeline_json.replace("month", str(month))  # Replace month
+                            pipeline_json = pipeline_json.replace("year", str(year))  # Replace year
+                            updated_pipeline = json.loads(pipeline_json)
+                            mongodb_query = updated_pipeline
+                            description = pattern_details["description"].format(date=raw_date)
+                            return mongodb_query, description
+                    if year:  # Year provided
+                        print(year)
+                        pipeline_json = json.dumps(pattern_details["mongodb"]["year"])  # Convert pipeline to JSON string
+                        pipeline_json = pipeline_json.replace("date_field", FIELD_MAPPING["date"])  # Replace date_field
+                        # pipeline_json = pipeline_json.replace("year", str(year))  # Replace year (no '$' prefix needed)
+                        updated_pipeline = json.loads(pipeline_json)  # Parse back to Python dict
+                        mongodb_query = updated_pipeline
+                        description = pattern_details["description"].format(date=raw_date)
+                        return mongodb_query, description
+
+
+                    else:
+                        # Provide feedback if the date could not be parsed
+                        return None, f"Date '{raw_date}' not recognized. Try formats like 'January 1, 2023', 'January, 2023', or '2023'."
 
             # TODO: GET THIS WORKING
             elif pattern_key == "total_sales_by_date_range":
@@ -261,10 +287,121 @@ def parse_query_nltk(user_input, table_info):
                 else:
                     # If no match is found, provide feedback with available options
                     return None, f"Field '{raw_field}' not recognized. Try one of: {', '.join(FIELD_MAPPING.keys())}"
+            
+            # elif pattern_key == "quantity_by_category":
+            #     raw_category = match.group(1).lower()  # Extract the category from the user query (e.g., "Bakery")
+
+            #     # Map the raw category to a database field using FIELD_MAPPING
+            #     group_field = FIELD_MAPPING.get(raw_category, None)  # Dynamically resolve the field
+            #     if not group_field:
+            #         # If no match found, return a helpful error message
+            #         return None, f"Category '{raw_category}' not recognized. Available categories: {', '.join(FIELD_MAPPING.keys())}"
+
+            #     # Resolve dynamic fields
+            #     quantity_field = FIELD_MAPPING.get("quantity", "transaction_qty")
+            #     product_name_field = FIELD_MAPPING.get("product", "product")
+
+            #     # Replace placeholders in the query
+            #     pipeline_json = json.dumps(pattern_details["mongodb"])  # Convert pipeline to JSON string
+            #     pipeline_json = pipeline_json.replace("${GROUP_FIELD}", group_field)  # Replace GROUP_FIELD placeholder
+            #     pipeline_json = pipeline_json.replace("${quantity_field}", quantity_field)  # Replace quantity_field dynamically
+            #     pipeline_json = pipeline_json.replace("${name_field}", product_name_field)  # Replace name_field dynamically
+            #     updated_pipeline = json.loads(pipeline_json)  # Convert back to Python dict
+
+            #     # Build a description for the query
+            #     description = pattern_details["description"].format(location=raw_category)
+
+            #     # Return the constructed query and description
+            #     return updated_pipeline, description
+
+            elif pattern_key == "simple_count":
+                raw_field = match.group(1).lower()  # Extract the field name provided by the user (e.g., "products")
+
+                # Resolve the field name dynamically
+                field_name = FIELD_MAPPING.get(raw_field, raw_field)  # Use FIELD_MAPPING or fallback to the raw field
+
+                # Build the pipeline
+                pipeline = [
+                    {"$group": {
+                        "_id": f"${field_name}",  # Group by the specified field
+                        "count": {"$sum": 1}      # Count occurrences of each value
+                    }},
+                    {"$sort": {"count": -1}}  # Optional: Sort by count descending
+                ]
+
+                # Create a description
+                description = f"This query retrieves the count of each unique value in the field '{field_name}'."
+                return pipeline, description
+            
+            elif pattern_key == "simple_list":
+                raw_field = match.group(1).lower()  # Extract the field name provided by the user (e.g., "products")
+
+                # Resolve the field name dynamically
+                field_name = FIELD_MAPPING.get(raw_field, raw_field)  # Use FIELD_MAPPING or fallback to the raw field
+
+                # Build the pipeline
+                pipeline =  [
+                    # Stage 1: Group by the specified field
+                    {
+                        "$group": {
+                            "_id": f"${field_name}",  # Replace with the field name dynamically
+                            "count": {"$sum": 1}      # Count occurrences of each unique value
+                        }
+                    },
+                    # Stage 2: Calculate the total count of unique entries
+                    {
+                        "$group": {
+                            "_id": None,                      # Combine all grouped results
+                            "total_count": {"$sum": 1},       # Count total unique values
+                            "list": {"$push": {"value": "$_id"}}  # Create a list of grouped entries
+                        }
+                    },
+                    # Stage 3: Project the final result
+                    {
+                        "$project": {
+                            "_id": 0,
+                            "total_count": 1,
+                            "list": 1
+                        }
+                    }
+                ]
+
+                description = f"This query retrieves the count of each unique value in the field '{field_name}'."
+                return pipeline, description
+            
+            elif pattern_key == "simple_find":
+                # Extract groups from the pattern
+                field_to_return = match.group(1).lower()  # Field to return (e.g., "product")
+                filter_field = match.group(2).lower()  # Field to filter by (e.g., "store_location")
+                filter_value = match.group(3).lower()  # Value to filter on (e.g., "Astoria")
+
+                # Resolve dynamic fields from FIELD_MAPPING (if applicable)
+                field_to_return_resolved = FIELD_MAPPING.get(field_to_return, field_to_return)
+                filter_field_resolved = FIELD_MAPPING.get(filter_field, filter_field)
+                for uq in table_info["categorical"][filter_field_resolved]["unique_values"]:
+                    if filter_value.lower() in uq.lower():
+                        actual_filter_value = uq
+                        break
+                # Build the MongoDB query dynamically
+                pipeline = [
+                    # Find query with dynamic filter
+                    {"$match": {filter_field_resolved:{ "$eq":actual_filter_value}}},
+
+                    # Project the specific field dynamically
+                    {"$project": {field_to_return_resolved: 1, "_id": 0}}
+                ]
+
+                # Create a description for the query
+                description = (
+                    f"This query retrieves the {field_to_return_resolved} where "
+                    f"{filter_field_resolved} is '{filter_value}'."
+                )
+
+                return pipeline, description
 
 
             elif pattern_key == "most_expensive":
-                print("MOSTEXPENSIVE", FIELD_MAPPING)
+                # print("MOSTEXPENSIVE", FIELD_MAPPING)
                 # mongodb_query = [
                 #     {"$sort": {FIELD_MAPPING.get('price', 'price'): -1}},
                 #     {"$limit": 1},
@@ -276,6 +413,45 @@ def parse_query_nltk(user_input, table_info):
                 description = pattern_details["description"]
                 return mongodb_query, description
             
+            
+            elif pattern_key == "maximum_value":
+                # print("MAX VALUE", FIELD_MAPPING)
+                raw_field = match.group(1).lower() 
+                field_name = FIELD_MAPPING.get(raw_field, raw_field)
+                mongodb_query = []
+                pipeline_json = json.dumps(pattern_details["mongodb"])  # Convert to JSON string for safe replacement
+                pipeline_json = pipeline_json.replace("{FIELD_NAME}", field_name)  # Replace placeholder
+                updated_pipeline = json.loads(pipeline_json)
+                mongodb_query.extend(updated_pipeline)
+                
+                description = f"This query retrieves the count of each unique value in the field '{field_name}'."
+                return mongodb_query, description
+
+            elif pattern_key == "minimum_value":
+                # print("MAX VALUE", FIELD_MAPPING)
+                raw_field = match.group(1).lower() 
+                field_name = FIELD_MAPPING.get(raw_field, raw_field)
+                mongodb_query = []
+                pipeline_json = json.dumps(pattern_details["mongodb"])  # Convert to JSON string for safe replacement
+                pipeline_json = pipeline_json.replace("{FIELD_NAME}", field_name)  # Replace placeholder
+                updated_pipeline = json.loads(pipeline_json)
+                mongodb_query.extend(updated_pipeline)
+                
+                description = f"This query retrieves the count of each unique value in the field '{field_name}'."
+                return mongodb_query, description
+            
+            elif pattern_key == "average_value":
+                # print("MAX VALUE", FIELD_MAPPING)
+                raw_field = match.group(1).lower() 
+                field_name = FIELD_MAPPING.get(raw_field, raw_field)
+                mongodb_query = []
+                pipeline_json = json.dumps(pattern_details["mongodb"])  # Convert to JSON string for safe replacement
+                pipeline_json = pipeline_json.replace("{FIELD_NAME}", field_name)  # Replace placeholder
+                updated_pipeline = json.loads(pipeline_json)
+                mongodb_query.extend(updated_pipeline)
+                
+                description = f"This query retrieves the count of each unique value in the field '{field_name}'."
+                return mongodb_query, description
 
             elif pattern_key == "least_expensive":
                 mongodb_query = []

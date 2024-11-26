@@ -29,7 +29,7 @@ def run_cli(table_name):
 
     # Gather metrics and initialize patterns
     table_info = gather_metrics(connection, table_name)
-    # print("Field Mapping (FIELD_MAPPING):", FIELD_MAPPING)  # Debugging
+    print("Field Mapping (FIELD_MAPPING):", FIELD_MAPPING)  # Debugging
     # print("Known Store Locations (KNOWN_STORE_LOCATIONS):", KNOWN_STORE_LOCATIONS)  # Debugging
     # print("Table Info:", table_info)
     # print("Initializing patterns...")

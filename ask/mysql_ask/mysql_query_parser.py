@@ -1,192 +1,4 @@
 import nltk
-nltk.download('averaged_perceptron_tagger')
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-import re
-from ask.mysql_ask.mysql_globals import FIELD_MAPPING, PATTERNS, KNOWN_STORE_LOCATIONS
-from ask.mysql_ask.mysql_helpers import normalize_date, normalize_location_from_keywords
-
-def parse_query_nltk(user_input):
-    """Parse natural language query into MongoDB query."""
-    # Tokenize and process the user input
-    tokens = word_tokenize(user_input.lower())
-    tagged = nltk.pos_tag(tokens)
-    stop_words = set(stopwords.words('english'))
-    
-    # Remove stop words
-    keywords = [word for word, pos in tagged if word not in stop_words]
-
-    # Debugging output for tokenization
-    # (f"Tokens: {tokens}")
-    # print(f"Tagged: {tagged}")
-    # print(f"Keywords: {keywords}")
-
-    # Check if FIELD_MAPPING is populated
-    if not FIELD_MAPPING:
-        return None, "FIELD_MAPPING is empty. Please ensure it is properly populated."
-
-    # Handle multi-word keywords first
-    normalized_keywords = []
-    matched_phrases = set()  # Avoid double-matching tokens in phrases
-
-    for phrase, column in FIELD_MAPPING.items():
-        if " " in phrase and phrase in user_input.lower():
-            normalized_keywords.append(column)
-            matched_phrases.update(phrase.split())  # Mark tokens in the phrase as matched
-
-    # Handle single-word keywords (excluding tokens already matched in phrases)
-    for word in keywords:
-        if word not in matched_phrases:  # Only process unmatched tokens
-            normalized_keywords.append(FIELD_MAPPING.get(word, word))
-
-    # Debugging output for normalized keywords
-    # print(f"Normalized Keywords: {normalized_keywords}")
-
-    # Iterate over all patterns and try to match
-    for pattern_key, pattern_details in PATTERNS.items():
-
-        match = re.search(pattern_details["pattern"], user_input, re.IGNORECASE)
-        if match:
-            # print(f"Matched pattern: {pattern_key}")  # Debugging matched pattern
-
-            # Handle specific patterns with parameters
-            if pattern_key == "top_best_selling_products":
-                limit = match.group(1)  # Extract the limit (e.g., "5")
-                try:
-                    limit = int(limit)
-                    mongodb_query = [
-                        {"$group": {
-                            "_id": f"${FIELD_MAPPING.get('product', 'product')}",
-                            "total_quantity": {"$sum": f"${FIELD_MAPPING.get('quantity', 'quantity')}"}
-                        }},
-                        {"$sort": {"total_quantity": -1}},
-                        {"$limit": limit}
-                    ]
-                    description = pattern_details["description"].format(limit=limit)
-                    return mongodb_query, description
-                except ValueError:
-                    return None, "Invalid limit specified. Please provide a number (e.g., 'top 5 best-selling products')."
-
-            elif pattern_key == "specific_product_sales":
-                product = match.group(1)  # Extract product name
-                mongodb_query = [
-                    {"$match": {FIELD_MAPPING.get('product', 'product'): {"$regex": product, "$options": "i"}}},
-                    {"$group": {
-                        "_id": None,
-                        "total_quantity": {"$sum": f"${FIELD_MAPPING.get('quantity', 'quantity')}"},
-                        "total_sales": {"$sum": {"$multiply": [
-                            f"${FIELD_MAPPING.get('quantity', 'quantity')}",
-                            f"${FIELD_MAPPING.get('price', 'price')}"
-                        ]}}
-                    }}
-                ]
-                description = pattern_details["description"].format(product=product)
-                return mongodb_query, description
-
-            elif pattern_key == "total_sales_by_date":
-                time_phrase = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", match.group(3))  # Clean ordinal suffixes
-                normalized_date = normalize_date(time_phrase)
-                if normalized_date:
-                    mongodb_query = [
-                        {"$match": {"transaction_date": normalized_date}},
-                        {"$group": {
-                            "_id": None,
-                            "total_sales": {"$sum": {"$multiply": [
-                                f"${FIELD_MAPPING.get('quantity', 'quantity')}",
-                                f"${FIELD_MAPPING.get('price', 'price')}"
-                            ]}}
-                        }}
-                    ]
-                    description = f"This query retrieves the total sales on {normalized_date}."
-                    return mongodb_query, description
-
-            elif pattern_key == "total_sales_by_date_range":
-                # Extract start and end date phrases from the matched groups
-                start_phrase = match.group(2).strip()
-                end_phrase = match.group(3).strip()
-
-                # Normalize the start and end dates
-                start_date = normalize_date(start_phrase)
-                end_date = normalize_date(end_phrase)
-
-                if start_date and end_date:
-                    mongodb_query = [
-                        {"$match": {
-                            "transaction_date": {"$gte": start_date, "$lte": end_date}
-                        }},
-                        {"$group": {
-                            "_id": None,
-                            "total_sales": {"$sum": {"$multiply": [
-                                f"${FIELD_MAPPING.get('quantity', 'quantity')}",
-                                f"${FIELD_MAPPING.get('price', 'price')}"
-                            ]}}
-                        }}
-                    ]
-                    description = f"This query retrieves the total sales between {start_date} and {end_date}."
-                    return mongodb_query, description
-                else:
-                    return None, "Could not determine the date range. Please use valid start and end dates."
-
-            elif pattern_key == "total_sales_by_field":
-                raw_field = match.group(3).lower()  # Ensure lowercase for matching
-                db_field = FIELD_MAPPING.get(raw_field)
-                if db_field:
-                    mongodb_query = [
-                        {"$group": {
-                            "_id": f"${db_field}",
-                            "total_sales": {"$sum": {"$multiply": [
-                                f"${FIELD_MAPPING.get('quantity', 'quantity')}",
-                                f"${FIELD_MAPPING.get('price', 'price')}"
-                            ]}}
-                        }}
-                    ]
-                    description = pattern_details["description"].format(field=db_field)
-                    return mongodb_query, description
-                else:
-                    return None, f"Field '{raw_field}' not recognized. Try one of: {', '.join(FIELD_MAPPING.keys())}"
-
-            elif pattern_key == "total_sales_by_location":
-                location = normalize_location_from_keywords(normalized_keywords)
-                if location:
-                    mongodb_query = [
-                        {"$match": {FIELD_MAPPING.get('store_location', 'store_location'): location}},
-                        {"$group": {
-                            "_id": f"${FIELD_MAPPING.get('store_location', 'store_location')}",
-                            "total_sales": {"$sum": {"$multiply": [
-                                f"${FIELD_MAPPING.get('quantity', '1')}",
-                                f"${FIELD_MAPPING.get('price', 'price_usd')}"
-                            ]}}
-                        }}
-                    ]
-                    description = pattern_details["description"].format(location=location)
-                    return mongodb_query, description
-                else:
-                    return None, "Could not determine the location. Please specify a valid store."
-
-            elif pattern_key == "average_price":
-                raw_field = match.group(2).lower()  # Ensure lowercase for matching
-                db_field = FIELD_MAPPING.get(raw_field)
-                if db_field:
-                    mongodb_query = [
-                        {"$group": {
-                            "_id": f"${db_field}",
-                            "avg_price": {"$avg": f"${FIELD_MAPPING.get('price', 'price')}"}
-                        }}
-                    ]
-                    description = pattern_details["description"].format(field=db_field)
-                    return mongodb_query, description
-                else:
-                    return None, f"Field '{raw_field}' not recognized. Try one of: {', '.join(FIELD_MAPPING.keys())}"
-
-            elif pattern_key == "most_expensive":
-                mongodb_query = [
-                    {"$sort": {FIELD_MAPPING.get('price', 'price'): -1}},
-                    {"$limit": 1}
-                ]
-                description = pattern_details["description"]
-                return mongodb_query, description
-
-            elif pattern_key == "least_expensive":import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 import re
@@ -247,8 +59,18 @@ def parse_query_nltk(user_input):
                 except ValueError:
                     return None, "Invalid limit specified. Please provide a number (e.g., 'top 5 best-selling products')."
 
+            elif pattern_key == "top_least_selling_products":
+                limit = match.group(1)  # Extract the limit (e.g., "5")
+                try:
+                    limit = int(limit)
+                    query = pattern_details["sql"].format(limit=limit)
+                    description = pattern_details["description"].format(limit=limit)
+                    return query, description
+                except ValueError:
+                    return None, "Invalid limit specified. Please provide a number (e.g., 'top 5 best-selling products')."
+
             elif pattern_key == "specific_product_sales":
-                product = match.group(2)  # Extract product name
+                product = match.group(1)  # Extract product name
                 query = pattern_details["sql"].format(product=product)
                 description = pattern_details["description"].format(product=product)
                 return query, description
@@ -269,14 +91,15 @@ def parse_query_nltk(user_input):
 
                 # Check for specific date format (YYYY-MM-DD)
                 if re.match(r"\d{4}-\d{2}-\d{2}", time_phrase):  # Match specific date format
-                    query = pattern_details["sql"][sql_key].format(specific_date=time_phrase)
+                    date_field = FIELD_MAPPING.get("date", "date")
+                    query = pattern_details["sql"][sql_key].format(date_field=date_field, specific_date=time_phrase)
                     description = f"This query retrieves the {query_type} on {time_phrase}."
                     return query, description
 
                 # Specific date query with natural language (e.g., "January 1st")
                 normalized_date = normalize_date(time_phrase)
                 if normalized_date:
-                    query = pattern_details["sql"][sql_key].format(specific_date=normalized_date)
+                    query = pattern_details["sql"][sql_key].format(date_field=date_field,specific_date=normalized_date)
                     description = f"This query retrieves the {query_type} on {normalized_date}."
                     return query, description
 
@@ -445,6 +268,22 @@ def parse_query_nltk(user_input):
                 return query, description
 
             elif pattern_key == "top_most_streamed_songs":
+                if match.group(2):  # First part of the pattern matches (e.g., "Top 5 most streamed songs")
+                    limit = match.group(2)  # Extract the limit
+                    try:
+                        limit = int(limit)
+                        query = pattern_details["sql"].format(
+                            song_field=FIELD_MAPPING.get("song", "track"),
+                            stream_field=FIELD_MAPPING.get("streams", "streams"),
+                            table_name="spotify",
+                            limit=limit
+                        )
+                        description = pattern_details["description"].format(limit=limit)
+                        return query, description
+                    except ValueError:
+                        return None, "Invalid limit specified. Please provide a number (e.g., 'top 5 most streamed songs')."
+
+            elif pattern_key == "top_least_streamed_songs":
                 if match.group(2):  # First part of the pattern matches (e.g., "Top 5 most streamed songs")
                     limit = match.group(2)  # Extract the limit
                     try:

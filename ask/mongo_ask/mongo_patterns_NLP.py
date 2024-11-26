@@ -9,16 +9,16 @@ def generate_column_keywords(table_info):
     # Common patterns for synonyms
     keyword_patterns = {
         "id": ["id", "identifier"],
-        "category": ["category", "classification", "product category"],
-        "product": ["product", "item", "model", "phone model", "products", "phones", "phone"],
-        "type": ["type", "kind", "product type", "os", "os type"],
-        "location": ["location", "place", "branch", "area", "store location", "store"],
+        "category": ["category", "classification", "product category", "categories"],
+        "product": ["product","products", "item", "model", "phone model", "products", "phones", "phone"],
+        "type": ["type", "types","kind", "product type", "os", "os type", "os types"],
+        "location": ["location", "place", "branch", "area", "store location", "store", "stores", "locations"],
         "date": ["date", "day", "time"],
-        "name": ["name", "title", "label"],
+        "name": ["name", "names", "title", "label"],
         "amount": ["amount", "value", "price", "cost"],
         "price": ["price", "cost", "price_usd"],
-        "quantity": ["quantity", "transaction_qty", "count", "number"],
-        "phone brand": ["phone brand", "brand"],
+        "quantity": ["quantity", "quantities", "transaction_qty", "count", "number"],
+        "phone brand": ["phone brand", "brand", "brands"],
         "model": ["phone model", "model", "models"],
         "song": ["song", "track", "songs", "tracks"],
         "track": ["song", "track", "songs", "tracks"],
@@ -74,6 +74,7 @@ def initialize_patterns(db, collection_name, table_info):
 
     # REMOVE
     print(FIELD_MAPPING)
+    print(KNOWN_STORE_LOCATIONS)
     # Debug: Ensure FIELD_MAPPING is populated before further usage
     # print("Debug: FIELD_MAPPING after synonym population:", FIELD_MAPPING)
 
@@ -84,15 +85,15 @@ def initialize_patterns(db, collection_name, table_info):
     location_field = FIELD_MAPPING.get("location", "store")
     date_field = FIELD_MAPPING.get("date", "launch_date")
     stream_field = FIELD_MAPPING.get("stream", "streams")
+    name_field = FIELD_MAPPING.get("name", "artist_name")
     # Debug the fetched fields
-    # print(f"Quantity Field: {quantity_field}, Price Field: {price_field}, Product Field: {product_field}, Location Field: {location_field}, Date Field: {date_field}")
+    print(f"Quantity Field: {quantity_field}, Price Field: {price_field}, Product Field: {product_field}, Location Field: {location_field}, Date Field: {date_field}")
 
     # Define static patterns dynamically using the extracted fields
     static_patterns = {
 
         # TODO: 1. count_by_category
-        #       2. max of entire dataset        \
-        #       3. min of entire dataset         \
+        
         #      4. average of entire dataset      /    IF you get one, you can replace for the others
         #      5. total sales of entire dataset /
         #      6. total sales by date and date_range
@@ -103,7 +104,7 @@ def initialize_patterns(db, collection_name, table_info):
             "mongodb": [
                 {
                     "$group": {
-                        "_id": "{GROUP_FIELD}",
+                        "_id": "${GROUP_FIELD}",
                         "total_sales": {
                             "$sum": {
                                 "$multiply": [
@@ -137,26 +138,61 @@ def initialize_patterns(db, collection_name, table_info):
     "description": "This query retrieves the total sales amount for each store location."
 },
 
-        #  "total_sales_by_date": {
-        #     "pattern": r".*total sales (in|on|for|during) ([\w\s,]+)",
-        #     "mongodb": {
-        #         "specific_date": [
-        #             {"$match": {"transaction_date": "specific_date"}},  # Replace dynamically
-        #             {"$group": {"_id": None, "total_sales": {"$sum": {"$multiply": ["$quantity_field", "$price_field"]}}}}
-        #         ],
-        #         "month": [
-        #             {"$match": {"$expr": {"$eq": [{"$month": "$transaction_date"}, "month"]}}},  # Replace dynamically
-        #             {"$group": {"_id": None, "total_sales": {"$sum": {"$multiply": ["$quantity_field", "$price_field"]}}}}
-        #         ],
-        #         "year": [
-        #             {"$match": {"$expr": {"$eq": [{"$year": "$transaction_date"}, "year"]}}},  # Replace dynamically
-        #             {"$group": {"_id": None, "total_sales": {"$sum": {"$multiply": ["$quantity_field", "$price_field"]}}}}
-        #         ]
-        #     },
-        #     "description": "This query retrieves the total sales for a specific date, month, or year."
-        # },
+         "total_sales_by_date": {
+    "pattern": r".*total sales (in|on|for|during) ([\w\s,]+)",
+    "mongodb": {
+        "specific_date": [
+            {"$match": {"date_field": "specific_date"}},  # Replace date_field and specific_date dynamically
+            {"$group": {
+                "_id": None,
+                "total_sales": {
+                    "$sum": {"$multiply": [
+                            f"${FIELD_MAPPING.get('quantity', 1)}" if FIELD_MAPPING.get('quantity', 1) != 1 else "1",
+                            f"${FIELD_MAPPING.get('price', 'price_usd')}"]}  # Replace dynamically
+                }
+            }}
+        ],
+        "month": [
+            {"$match": {
+                "$expr": {"$eq": [{"$month": "$date_field"}, "month"]}  # Replace dynamically
+            }},
+            {"$group": {
+                "_id": None,
+                "total_sales": {
+                    "$sum": {"$multiply": ["$quantity_field", "$price_field"]}  # Replace dynamically
+                }
+            }}
+        ],
+        "year": [
+           {
+        "$match": {
+            "$expr": {
+                "$eq": [
+                    { "$year": "$transaction_date" },
+                    2023
+                ]
+            }
+        }
+    },
+            {
+        "$group": {
+            "_id": None,
+            "total_sales": {
+                "$sum": {
+                    "$multiply": ["$transaction_qty", "$unit_price"]
+                }
+            }
+        }
+    },
+        ]
+    },
+    "description": "This query retrieves the total sales for a specific date, month, or year."
+},
+
+
+
         "top_best_selling_products": {
-            "pattern": r".*top (\d+)\s+(?:best[-\s]?selling)\s+(products|models|items|phones|phone models)",
+            "pattern": r".*top (\d+)\s+(?:best[-\s]?selling)\s+(products|models|items|phones|phone models|brands|os types)",
             "mongodb": [
                 {"$group": {
                     "_id": "${GROUP_FIELD}",  # Replace dynamically
@@ -168,9 +204,9 @@ def initialize_patterns(db, collection_name, table_info):
             "description": "This query retrieves the top {limit} best-selling products or models by quantity."
         },
         
-        # TODO: FIX THE REGEX SO THAT IT MATCHES "WORST" AND "LEAST"
+        # TODO: DONE"
         "top_least_selling_products": {
-            "pattern": r".*top (\d+)\s+(?:best[-\s]?selling)\s+(products|models|items|phones|phone models)",
+            "pattern": r".*top (\d+)\s+(?:least|worst|least[-\s]?selling|worst[-\s]?selling)\s+(products|models|items|phones|phone models|brands|os types)",
             "mongodb": [
                 {"$group": {
                     "_id": "${GROUP_FIELD}",  # Replace dynamically
@@ -184,7 +220,7 @@ def initialize_patterns(db, collection_name, table_info):
 
          # TODO: FIX THE REGEX SO THAT IT MATCHES "WORST" AND "LEAST"
         "top_least_streamed_songs": {
-            "pattern": r"(top (\d+)\s+(?:(most|highest)[-\s]?streamed)\s+(tracks|songs))|((song|track)\s+with\s+highest\s+streams)",
+            "pattern": r"(top (\d+)\s+(?:(least|worst|least)[-\s]?streamed)\s+(tracks|songs))|((song|track)\s+with\s+lowest\s+streams)",
             "mongodb": [
                 {"$group": {
                     "_id": "${GROUP_FIELD}",  # Replace dynamically
@@ -198,7 +234,7 @@ def initialize_patterns(db, collection_name, table_info):
 
 
         "top_most_streamed_songs": {
-            "pattern": r"(top (\d+)\s+(?:(most|highest)[-\s]?streamed)\s+(tracks|songs))|((song|track)\s+with\s+highest\s+streams)",
+            "pattern": r"(top (\d+)\s+(?:(most|highest)[-\s]?streamed)\s+(tracks|songs|song|artist))|((song|track|artist)\s+with\s+highest\s+streams)",
             "mongodb": [
                 {"$group": {
                     "_id": "${GROUP_FIELD}",  # Replace dynamically
@@ -212,7 +248,8 @@ def initialize_patterns(db, collection_name, table_info):
 
         "specific_product_sales": {
             "pattern": r".*sales of (.+)",
-            "mongodb": [ # Replace dynamically
+            "mongodb": [ # Replace dynamically  
+                
                 {"$group": {
                     "_id": "${GROUP_FIELD}",
                     "total_quantity": {"$sum":  f"${quantity_field}" if quantity_field != 1 else 1,},  # Replace dynamically
@@ -250,20 +287,102 @@ def initialize_patterns(db, collection_name, table_info):
         #     "description": "This query retrieves the quantity of products sold by category in {location}."
         # },
 
+# "quantity_by_category": {
+#     "pattern": r".*quantity of (\w+(?:'?\w+)?)",
+#     "mongodb": [
+#         {"$group": {
+#             "_id": "${GROUP_FIELD}",  # Replace dynamically
+#             "total_quantity": {"$sum": f"${quantity_field}"},  # Replace dynamically
+#             "total_sales": {"$sum": f"${quantity_field}"},  # Replace dynamically
+#             "product_names": {"$addToSet": "${name_field}"}  # Collect distinct product names
+#         }}
+#     ],
+#     "description": "This query retrieves the total quantity of products sold in {location}, along with distinct counts and projections."
+# },
 
-        # "quantity_by_location": {
-        #     "pattern": r".*quantity of products sold in (\w+(?:'?\w+)?)",
-        #     "mongodb": [
-        #         {"$match": {"store_location": "location"}},  # Replace dynamically
-        #         {"$group": {
-        #             "_id": "$store_location",  # Replace dynamically
-        #             "total_quantity": {"$sum": "$quantity_field"}  # Replace dynamically
-        #         }}
-        #     ],
-        #     "description": "This query retrieves the total quantity of products sold in {location}."
-        # },
+        "quantity_by_category": {
+            "pattern": r".*quantity of (\w+(?:'?\w+)?)",
+            "mongodb": [
+                {
+                    "$group": {
+                        "_id": "${GROUP_FIELD}",  # Replace dynamically with the category field
+                        "total_quantity": {"$sum": f"${quantity_field}"},  # Replace dynamically
+                        "total_sales": {"$sum": f"${quantity_field}"},  # Replace dynamically
+                        "product_names": {"$addToSet": "${name_field}"},  # Collect distinct product names
+                        "total_categories": {"$sum": 1}  # Count occurrences of categories
+                    }
+                }
+            ],
+            "description": "This query retrieves the total quantity of products sold in {location}, along with category counts and product details."
+        },
 
-        "average_price_by_category": {
+#------------------------------- COUNT
+        "simple_count": {
+            "pattern": r".*count of (\w+(?:'?\w+)?)",
+            "mongodb":         
+                [
+                {
+                    "$group": {
+                        "_id":"${GROUP_FIELD}",  # Group by the field "product"
+                        "count": {"$sum": 1}  # Count occurrences of each product
+                    }
+                },
+                {
+                    "$sort": {"count": -1}  # Sort by count in descending order (optional)
+                }
+            ],
+            "description": "This query retrieves the total quantity of products sold in {location}, along with category counts and product details."
+        },
+
+# -------------------------------LIST
+        "simple_list": {
+            "pattern": r".*list of (\w+(?:'?\w+)?)",
+            "mongodb":         
+[
+    # Stage 1: Group by the specified field
+    {
+        "$group": {
+            "_id": "${GROUP_FIELD}",  # Replace with the field name dynamically
+            "count": {"$sum": 1}      # Count occurrences of each unique value
+        }
+    },
+    # Stage 2: Calculate the total count of unique entries
+    {
+        "$group": {
+            "_id": None,                      # Combine all grouped results
+            "total_count": {"$sum": 1},       # Count total unique values
+            "list": {"$push": {"value": "$_id"}}  # Create a list of grouped entries
+        }
+    },
+    # Stage 3: Project the final result
+    {
+        "$project": {
+            "_id": 0,  # Add title dynamically
+            "total_count": 1,
+            "list": 1
+        }
+    }
+],
+            "description": "This query retrieves the total quantity of products sold in {location}, along with category counts and product details."
+        },
+
+# -------------------------------FIND
+
+        "simple_find": {
+            "pattern": r".*find (\w+(?:'?\w+)?) where (\w+(?:'?\w+)?) is (\w+(?:'?\w+)?)",
+            "mongodb": [
+                {
+                    "$match": {"${FILTER_FIELD}": "${FILTER_VALUE}"}  # Dynamic filter placeholder
+                },
+                {
+                    "$project": {"${FIELD_TO_RETURN}": 1, "_id": 0}  # Dynamic projection placeholder
+                }
+            ],
+            "description": "This query retrieves the {FIELD_TO_RETURN} where {FILTER_FIELD} is {FILTER_VALUE}."
+        },
+
+
+        "average_price_by_field": {
             "pattern": r".*average price (of|for|for each|by) (\w+)",  # Multi-word support
             "mongodb": [
                 {
@@ -286,6 +405,55 @@ def initialize_patterns(db, collection_name, table_info):
             "description": "This query retrieves the most expensive product."
         },
 
+        "maximum_value": {
+            "pattern": r".*maximum value of (\w+)",
+            "mongodb": [
+                     {
+                        "$sort": { "{FIELD_NAME}": -1 }  #// Sort in descending order by the field
+                    },
+                    {
+                        "$limit": 1 # // Limit the result to the top document
+                    },
+                    {"$project": {f"{FIELD_MAPPING.get('product', "product")}": 1, "{FIELD_NAME}": 1, "_id": 0}}
+            ],
+            "description": "This query retrieves the most expensive product."
+        },
+
+        "minimum_value": {
+            "pattern": r".*minimum value of (\w+)",
+            "mongodb": [
+                     {
+                        "$sort": { "{FIELD_NAME}": 1 }  #// Sort in ascending order by the field
+                    },
+                    {
+                        "$limit": 1 # // Limit the result to the top document
+                    },
+                    {"$project": {f"{FIELD_MAPPING.get('product', "product")}": 1, "{FIELD_NAME}": 1, "_id": 0}}
+            ],
+            "description": "This query retrieves the most expensive product."
+        },
+
+
+        "average_value": {
+            "pattern": r".*average value of (\w+)",
+            "mongodb": [
+                {
+                    "$group": {
+                        "_id": None,  # No grouping, calculate average for the entire collection
+                        "average_value": { "$avg": "${FIELD_NAME}" }  # Dynamically replace {FIELD_NAME}
+                    }
+                },
+                {
+                    "$project": {
+                        "_id": 0,
+                        "average_value": 1  # Include only the average value in the output
+                    }
+                }
+            ],
+            "description": "This query calculates the average value of the specified field."
+        },
+
+
         "least_expensive": {
             "pattern": r".*least expensive (phone|product|item|model)",
             "mongodb": [
@@ -296,18 +464,18 @@ def initialize_patterns(db, collection_name, table_info):
             "description": "This query retrieves the least expensive product."
         },
 
-        # "most_streamed_artist": {
-        #     "pattern": r".*(most streamed|highest streamed) artist",
-        #     "mongodb": [
-        #         {"$group": {
-        #             "_id": "$name_field",  # Replace dynamically
-        #             "total_streams": {"$sum": "$stream_field"}  # Replace dynamically
-        #         }},
-        #         {"$sort": {"total_streams": -1}},
-        #         {"$limit": 1}
-        #     ],
-        #     "description": "This query retrieves the artist with the highest total streams."
-        # }
+    #     "most_streamed_artist": {
+    #         "pattern": r".*(most streamed|highest streamed) artist",
+    #         "mongodb": [
+    #             {"$group": {
+    #                 "_id": f"${name_field}",  # Replace dynamically
+    #                 "total_streams": {"$sum": f"${stream_field}"}  # Replace dynamically
+    #             }},
+    #             {"$sort": {"total_streams": -1}},
+    #             {"$limit": 1}
+    #         ],
+    #         "description": "This query retrieves the artist with the highest total streams."
+    #     }
     }
 
     # Debug: Static patterns before updates

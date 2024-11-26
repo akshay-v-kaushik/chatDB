@@ -14,11 +14,11 @@ def generate_column_keywords(table_info):
     # Common patterns for synonyms
     keyword_patterns = {
         "id": ["id", "identifier"],
-        "category": ["category", "classification", "product category","department"],
+        "category": ["category", "categories", "classification", "product category","department"],
         "product": ["product", "item", "model", "phone model", "products", "phones", "phone"],
         "type": ["type", "kind", "product type", "os", "os type"],
-        "location": ["location", "place", "branch", "area", "store location", "store", "city"],
-        "date": ["date", "day", "time"],
+        "location": ["location", "locations" ,"stores" ,"place", "branch", "area", "store_location", "store", "city"],
+        "date": ["date", "day", "time", "transaction_date", "launch_date", "release_date"],
         "amount": ["amount", "value", "price", "cost"],
         "price": ["price", "unit price", "cost", "amount","price_usd"],
         "quantity": ["quantity", "transaction_qty", "count", "number"],
@@ -26,7 +26,7 @@ def generate_column_keywords(table_info):
         "model": ["phone model", "model", "models"],
         "song": ["song", "track", "songs", "tracks"],
         "track": ["song", "track", "songs", "tracks"],
-        "name": ["artist", "singer", "singer names", "artist names", "students", "student names"],
+        "name": ["artist", "artists", "singer", "singer names", "artist names", "students", "student names"],
         "department": ["department", "departments", "Department"],
         "gpa": ["gpa", "grade", "score", "gpa score"],
         "gender" :["gender", "Gender"]
@@ -84,7 +84,7 @@ def initialize_patterns(connection, table_name, table_info):
         for synonym in synonyms:
             FIELD_MAPPING[synonym] = column  # Map each synonym to its corresponding column
 
-    # print(f"INVERTED FIELD MAPPING: \n {FIELD_MAPPING}")
+    print(f"INVERTED FIELD MAPPING: \n {FIELD_MAPPING}")
     # Debug: Ensure FIELD_MAPPING is populated before further usage
     # print("Debug: Store location after synonym population:", KNOWN_STORE_LOCATIONS)
 
@@ -99,8 +99,8 @@ def initialize_patterns(connection, table_name, table_info):
     score_field = FIELD_MAPPING.get("score", "gpa")
     gender_field = FIELD_MAPPING.get("gender", "gender")
     department_field = FIELD_MAPPING.get("department", "Department")
-
-
+    date_field = FIELD_MAPPING.get("date", "date")
+    category_field = FIELD_MAPPING.get("category", "category")
     # Debug the fetched fields
     # print(
     #     f"Quantity Field: {quantity_field}, Price Field: {price_field}, Name Field: {name_field}"
@@ -139,12 +139,12 @@ def initialize_patterns(connection, table_name, table_info):
         "total_sales_by_date": {
             "pattern": r".*(total sales|songs released|tracks released) (in|on|for|during) ([\w\s,]+)",
             "sql": {
-                "specific_date_sales": "SELECT SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE transaction_date = '{specific_date}';",
-                "specific_date_tracks": "SELECT COUNT(*) AS total_tracks FROM {table_name} WHERE release_date = '{specific_date}';",
-                "month_sales": "SELECT SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE DATE_FORMAT(transaction_date, '%M') = '{month}';",
-                "month_tracks": "SELECT COUNT(*) AS total_tracks FROM {table_name} WHERE DATE_FORMAT(release_date, '%M') = '{month}';",
-                "year_sales": "SELECT SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE YEAR(transaction_date) = {year};",
-                "year_tracks": "SELECT COUNT(*) AS total_tracks FROM {table_name} WHERE YEAR(release_date) = {year};"
+                "specific_date_sales": "SELECT '{specific_date}',SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE transaction_date = '{specific_date}';",
+                "specific_date_tracks": "SELECT '{specific_date}', COUNT(*) AS total_tracks FROM {table_name} WHERE release_date = '{specific_date}';",
+                "month_sales": "SELECT '{month}', SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE DATE_FORMAT(transaction_date, '%M') = '{month}';",
+                "month_tracks": "SELECT '{month}', COUNT(*) AS total_tracks FROM {table_name} WHERE DATE_FORMAT(release_date, '%M') = '{month}';",
+                "year_sales": "SELECT '{year}', SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE YEAR(transaction_date) = {year};",
+                "year_tracks": "SELECT '{year}', COUNT(*) AS total_tracks FROM {table_name} WHERE YEAR(release_date) = {year};"
             },
             "description": "This query retrieves the total sales or the total songs released for a specific date, month, year, or timeframe."
         },
@@ -156,6 +156,11 @@ def initialize_patterns(connection, table_name, table_info):
             "sql": "SELECT {product_field}, SUM({quantity_field}) AS total_quantity FROM {table_name} GROUP BY {product_field} ORDER BY total_quantity DESC LIMIT {limit};",
             "description": "This query retrieves the top {limit} best-selling products or models by quantity."
         },
+        "top_least_selling_products": {
+            "pattern": r".*top (\d+)\s+(?:worst[-\s]?selling)\s+(products|models|items|phones)",
+            "sql": "SELECT {product_field}, SUM({quantity_field}) AS total_quantity FROM {table_name} GROUP BY {product_field} ORDER BY total_quantity ASC LIMIT {limit};",
+            "description": "This query retrieves the top {limit} best-selling products or models by quantity."
+        },
 
         "top_most_streamed_songs": {
             "pattern": r"(top (\d+)\s+(?:(most|highest)[-\s]?streamed)\s+(tracks|songs|artists))|((song|track|artists)\s+with\s+highest\s+streams)",
@@ -163,15 +168,20 @@ def initialize_patterns(connection, table_name, table_info):
             "description": "This query retrieves the top {limit} most-streamed tracks or songs."
         },
 
+        "top_least_streamed_songs": {
+            "pattern": r"(top (\d+)\s+(?:(least|lowest)[-\s]?streamed)\s+(tracks|songs|artists))|((song|track|artists)\s+with\s+highest\s+streams)",
+            "sql": "SELECT {song_field}, SUM({stream_field}) AS total_quantity FROM {table_name} GROUP BY {song_field} ORDER BY total_quantity ASC LIMIT {limit};",
+            "description": "This query retrieves the top {limit} most-streamed tracks or songs."
+        },
 
         "specific_product_sales": {
             "pattern": r".*sales of (.+)",
-            "sql": "SELECT SUM({quantity_field}) AS total_quantity, SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE {product_field} LIKE '%{product}%'",
+            "sql": "SELECT SUM({quantity_field}) AS total_quantity, SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE {product_field} LIKE '%{product}%' or {category_field} LIKE '%{product}%';",
             "description": "This query retrieves the total quantity and sales of a specific product."
         },
         "total_revenue_by_store": {
             "pattern": r".*total (revenue|sales) (for the store in|in) (\w+)",
-            "sql": "SELECT SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE store_location = '{store}';",
+            "sql": "SELECT '{store}',SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE store_location = '{store}';",
             "description": "This query retrieves the total revenue for the store in {store}."
         },
         "quantity_by_category_in_location": {
@@ -193,13 +203,13 @@ def initialize_patterns(connection, table_name, table_info):
 
         "most_expensive": {
             "pattern": r".*most expensive (phone|product|item|model)",
-            "sql": "SELECT {product_field} FROM {table_name} WHERE {price_field} = (SELECT MAX({price_field}) FROM {table_name});",
+            "sql": "SELECT {product_field}, {price_field} FROM {table_name} WHERE {price_field} = (SELECT MAX({price_field}) FROM {table_name});",
             "description": "This query retrieves the most expensive product."
         },
 
         "least_expensive": {
             "pattern": r"(.*least expensive (product|item))",
-            "sql": "SELECT {product_field} FROM {table_name} WHERE {price_field} = (SELECT MIN({price_field}) FROM {table_name});",
+            "sql": "SELECT {product_field}, {price_field} FROM {table_name} WHERE {price_field} = (SELECT MIN({price_field}) FROM {table_name});",
             "description": "This query retrieves the least expensive phone."
         },
 
@@ -210,7 +220,7 @@ def initialize_patterns(connection, table_name, table_info):
         },
 
         "average_streams_by_artist": {
-            "pattern": r".*(average streams by artist|streams average for each artist|average streams for artists)",
+            "pattern": r".*(average streams by artist|average streams by artists|streams average for each artist|average streams for artists)",
             "sql": "SELECT {name_field}, AVG({streams_field}) AS avg_streams FROM {table_name} GROUP BY {name_field};",
             "description": "This query calculates the average number of streams for each artist."
         },
@@ -263,6 +273,7 @@ def initialize_patterns(connection, table_name, table_info):
                 .replace("{score_field}", score_field)
                 .replace("{gender_field}", gender_field)
                 .replace("{department_field}", department_field)
+                .replace("{category_field}", category_field)
                 for sub_key, sub_query in pattern_details["sql"].items()
             }
             updated_patterns[pattern_key] = {**pattern_details, "sql": updated_sql}
@@ -281,6 +292,7 @@ def initialize_patterns(connection, table_name, table_info):
                 .replace("{score_field}", score_field)
                 .replace("{gender_field}", gender_field)
                 .replace("{department_field}", department_field)
+                .replace("{category_field}", category_field)
             }
 
     # Update PATTERNS globally

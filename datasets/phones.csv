@@ -1,4 +1,4 @@
-phone_brand,phone_model,store,price_usd,storage,ram,launch_date,weight,battery,price_range,os_type,os_version,battery_size,colors_available,fingerprint
+brand,phone,store,price_usd,storage,ram,launch_date,weight,battery,range,os_type,os_version,battery_size,colors_available,fingerprint
 apple,Apple iPhone 15 Plus,Amazon UK,842.52,512,6,22-09-2023,201,4383,medium price,iOS,17,Medium,5,Face
 apple,Apple iPhone 13 Pro Max,Amazon DE,732.84,512,6,24-09-2021,240,4352,high price,iOS,15,Medium,5,Face
 apple,Apple iPhone 15 Pro,Amazon US,827.5,512,8,22-09-2023,187,3274,medium price,iOS,17,Small,4,Face
