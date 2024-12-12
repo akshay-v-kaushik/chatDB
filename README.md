@@ -55,7 +55,8 @@
 
 - **CLI Options**:
   - **Upload Dataset**: Upload a dataset to the selected database.
-  - **Explore Database**: Explore the selected database (functionality to be implemented).
-  - **Generate Random Queries**: Generate random queries for the selected database (functionality to be implemented).
-  - **Natural Language Query**: Handle natural language queries for the selected database (functionality to be implemented).
+  - **Explore Database**: Explore the selected database.
+  - **Generate Random Queries**: Generate random queries for the selected database.
+  - **Natural Language Query**: Handle natural language queries for the selected database.
+  - **Delete Dataset**: Deletes a specific table/collection of the user's choice.
   - **Exit**: Exit the CLI.
