@@ -1,4 +1,6 @@
 import nltk
+# nltk.download('punkt_tab')
+# nltk.download('averaged_perceptron_tagger_eng')
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 import re
@@ -15,11 +17,7 @@ def parse_query_nltk(user_input):
     # Remove stop words
     keywords = [word for word, pos in tagged if word not in stop_words]
 
-    # Debugging output for tokenization
-    # print(f"Tokens: {tokens}")
-    # print(f"Tagged: {tagged}")
-    # print(f"Keywords: {keywords}")
-
+   
     # Check if FIELD_MAPPING is populated
     if not FIELD_MAPPING:
         return None, "FIELD_MAPPING is empty. Please ensure it is properly populated."
@@ -38,16 +36,12 @@ def parse_query_nltk(user_input):
         if word not in matched_phrases:  # Only process unmatched tokens
             normalized_keywords.append(FIELD_MAPPING.get(word, word))
 
-    # Debugging output for normalized keywords
-    # print(f"Normalized Keywords: {normalized_keywords}")
-
     # Iterate over all patterns and try to match
     for pattern_key, pattern_details in PATTERNS.items():
 
         match = re.search(pattern_details["pattern"], user_input, re.IGNORECASE)
         if match:
-            # print(f"Matched pattern: {pattern_key}")  # Debugging matched pattern
-
+           
             # Handle specific patterns with parameters
             if pattern_key == "top_best_selling_products":
                 limit = match.group(1)  # Extract the limit (e.g., "5")
@@ -426,18 +420,6 @@ def parse_query_nltk(user_input):
                     
                     return query, description
 
-
-
-            # elif pattern_key == "student_with_highest_gpa":
-            #     query = pattern_details["sql"].format(
-            #         name_field=FIELD_MAPPING.get("name", "Name"),
-            #         score_field=FIELD_MAPPING.get("score", "GPA"),
-            #         table_name="students"
-            #     )
-            #     description = pattern_details["description"]
-            #     return query, description
-
-            
             elif pattern_key == "average_streams_by_artist":
                 # Generate query using the field mapping
                 query = pattern_details["sql"].format(
@@ -469,8 +451,6 @@ def parse_query_nltk(user_input):
                     return query, description
                 else:
                     return None, "The query pattern did not match for 'average_gpa_by_category'."
-
-
 
     # Default case when no patterns match
     return None, (

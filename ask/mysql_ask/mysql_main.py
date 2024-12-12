@@ -25,14 +25,9 @@ def run_cli(table_name):
     if not connection:
         return
 
-    # table_name = "student_data"
-
     # Gather metrics and initialize patterns
     table_info = gather_metrics(connection, table_name)
-    print("Field Mapping (FIELD_MAPPING):", FIELD_MAPPING)  # Debugging
-    # print("Known Store Locations (KNOWN_STORE_LOCATIONS):", KNOWN_STORE_LOCATIONS)  # Debugging
-    # print("Table Info:", table_info)
-    # print("Initializing patterns...")
+
     initialize_patterns(connection, table_name, table_info)
 
     # print("Welcome to ChatDB CLI! Type your query or 'exit' to quit.")
@@ -40,9 +35,6 @@ def run_cli(table_name):
         user_input = input("Enter your query: ").strip().lower()
         if user_input in ['exit', 'quit']:
             break
-
-        # Debugging FIELD_MAPPING state before parsing
-        # print("Debug: FIELD_MAPPING before parsing:", FIELD_MAPPING)
 
         query, description = parse_query_nltk(user_input)
         if query:

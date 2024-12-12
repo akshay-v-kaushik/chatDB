@@ -38,17 +38,10 @@ def gather_metrics(connection, table_name):
 
     try:
         cursor = connection.cursor()
-        # FIELD_MAPPING.clear()
-        # KNOWN_STORE_LOCATIONS.clear()
-        # print(FIELD_MAPPING)
-        # Fetch table schema
-        # print(f"Fetching schema for table: {table_name}")
-        
-       #### INTEGRATION: CHANGE DSCI TO CONFIG DB 
         cursor.execute(
             "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.columns WHERE table_name = %s and table_schema = %s;",
-            (table_name,'dsci4')
-        )
+            (table_name,'chatDB'))
+
         schema = cursor.fetchall()
         # print(f"Schema fetched: {schema}")
         # print(schema)
@@ -78,7 +71,7 @@ def gather_metrics(connection, table_name):
                 unique_values_count = cursor.fetchone()[0]
                 # print(f"Unique values in column {column}: {unique_values_count}")
             except Exception as e:
-                print(f"Error fetching unique values for column {column}: {e}")
+                # print(f"Error fetching unique values for column {column}: {e}")
                 continue
 
             # Identify quantity and price fields
@@ -146,7 +139,7 @@ def gather_metrics(connection, table_name):
     finally:
         if cursor:
             cursor.close()
-        print("Cursor closed.")
+        # print("Cursor closed.")
     # return None
 
 
@@ -155,10 +148,10 @@ def connect_to_database():
     """Establish connection to the MySQL database."""
     try:
         connection = mysql.connector.connect(
-            host=config.MYSQL_CONFIG['host'].split(':')[0],
-            user=config.MYSQL_CONFIG['user'],
-            password=config.MYSQL_CONFIG['password'],
-            database=config.MYSQL_CONFIG['database'],
+            host="localhost",
+            user="root",
+            password="1234",
+            database="chatDB",
         )
         # print("Connection to the database was successful.")
         return connection

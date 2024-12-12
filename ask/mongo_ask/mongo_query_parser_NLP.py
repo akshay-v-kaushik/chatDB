@@ -1,6 +1,8 @@
 from datetime import datetime
 import json
 import nltk
+# nltk.download('punkt_tab')
+# nltk.download('averaged_perceptron_tagger_eng')
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 import re
@@ -16,12 +18,7 @@ def parse_query_nltk(user_input, table_info):
     
     # Remove stop words
     keywords = [word for word, pos in tagged if word not in stop_words]
-
-    # Debugging output for tokenization
-    print(f"Tokens: {tokens}")
-    print(f"Tagged: {tagged}")
-    print(f"Keywords: {keywords}")
-      # Handle multi-word keywords first
+    # Handle multi-word keywords first
     normalized_keywords = []
     matched_phrases = set()  # Avoid double-matching tokens in phrases
 
@@ -35,15 +32,12 @@ def parse_query_nltk(user_input, table_info):
         if word not in matched_phrases:  # Only process unmatched tokens
             normalized_keywords.append(FIELD_MAPPING.get(word, word))
 
-    # Debugging output for normalized keywords
-    print(f"Normalized Keywords: {normalized_keywords}")
-
     # Iterate over all patterns and try to match
     for pattern_key, pattern_details in PATTERNS.items():
 
         match = re.search(pattern_details["pattern"], user_input, re.IGNORECASE)
         if match:
-            print(f"Matched pattern: {pattern_key}")  # Debugging matched pattern
+            # print(f"Matched pattern: {pattern_key}")  # Debugging matched pattern
 
             if pattern_key == "specific_product_sales":
                 product = match.group(1)  # Extract product name
@@ -116,9 +110,7 @@ def parse_query_nltk(user_input, table_info):
                 
                 return mongodb_query, description
             
-            
-
-            # TODO: GET THIS WORKING
+    
             elif pattern_key == "total_sales_by_date":
                 raw_date = match.group(2).strip()  # Extract the date string from user input
                 normalized_date = normalize_date(raw_date)
@@ -288,32 +280,7 @@ def parse_query_nltk(user_input, table_info):
                     # If no match is found, provide feedback with available options
                     return None, f"Field '{raw_field}' not recognized. Try one of: {', '.join(FIELD_MAPPING.keys())}"
             
-            # elif pattern_key == "quantity_by_category":
-            #     raw_category = match.group(1).lower()  # Extract the category from the user query (e.g., "Bakery")
-
-            #     # Map the raw category to a database field using FIELD_MAPPING
-            #     group_field = FIELD_MAPPING.get(raw_category, None)  # Dynamically resolve the field
-            #     if not group_field:
-            #         # If no match found, return a helpful error message
-            #         return None, f"Category '{raw_category}' not recognized. Available categories: {', '.join(FIELD_MAPPING.keys())}"
-
-            #     # Resolve dynamic fields
-            #     quantity_field = FIELD_MAPPING.get("quantity", "transaction_qty")
-            #     product_name_field = FIELD_MAPPING.get("product", "product")
-
-            #     # Replace placeholders in the query
-            #     pipeline_json = json.dumps(pattern_details["mongodb"])  # Convert pipeline to JSON string
-            #     pipeline_json = pipeline_json.replace("${GROUP_FIELD}", group_field)  # Replace GROUP_FIELD placeholder
-            #     pipeline_json = pipeline_json.replace("${quantity_field}", quantity_field)  # Replace quantity_field dynamically
-            #     pipeline_json = pipeline_json.replace("${name_field}", product_name_field)  # Replace name_field dynamically
-            #     updated_pipeline = json.loads(pipeline_json)  # Convert back to Python dict
-
-            #     # Build a description for the query
-            #     description = pattern_details["description"].format(location=raw_category)
-
-            #     # Return the constructed query and description
-            #     return updated_pipeline, description
-
+            
             elif pattern_key == "simple_count":
                 raw_field = match.group(1).lower()  # Extract the field name provided by the user (e.g., "products")
 
@@ -401,12 +368,7 @@ def parse_query_nltk(user_input, table_info):
 
 
             elif pattern_key == "most_expensive":
-                # print("MOSTEXPENSIVE", FIELD_MAPPING)
-                # mongodb_query = [
-                #     {"$sort": {FIELD_MAPPING.get('price', 'price'): -1}},
-                #     {"$limit": 1},
-                #     {"$project": {FIELD_MAPPING.get('product', 'product'): 1, "_id": 0}}
-                # ]
+               
                 mongodb_query = []
                 mongodb_query.extend(pattern_details["mongodb"])
                 # print(mongodb_query)
@@ -460,33 +422,6 @@ def parse_query_nltk(user_input, table_info):
                 description = pattern_details["description"]
                 return mongodb_query, description
 
-            # elif pattern_key == "top_most_streamed_songs":
-            #     if match.group(2):  # Matches patterns like "Top 5 most streamed songs"
-            #         limit = int(match.group(2))
-            #         mongodb_query = [
-            #             {"$group": {
-            #                 "_id": f"${FIELD_MAPPING.get('song', 'track')}",
-            #                 "total_streams": {"$sum": f"${FIELD_MAPPING.get('streams', 'streams')}"}
-            #             }},
-            #             {"$sort": {"total_streams": -1}},
-            #             {"$limit": limit}
-            #         ]
-            #         description = pattern_details["description"].format(limit=limit)
-            #         return mongodb_query, description
-            #     elif match.group(5):  # Matches patterns like "Song with highest streams"
-            #         mongodb_query = [
-            #             {"$group": {
-            #                 "_id": f"${FIELD_MAPPING.get('song', 'track')}",
-            #                 "total_streams": {"$sum": f"${FIELD_MAPPING.get('streams', 'streams')}"}
-            #             }},
-            #             {"$sort": {"total_streams": -1}},
-            #             {"$limit": 1}
-            #         ]
-            #         description = "This query retrieves the song with the highest streams."
-                    # return mongodb_query, description
-
-
-        # 
         #  case when no patterns match
     return None, (
             

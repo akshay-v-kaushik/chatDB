@@ -31,7 +31,7 @@ def generate_column_keywords(table_info):
         "gpa": ["gpa", "grade", "score", "gpa score"],
         "gender" :["gender", "Gender"]
     }
-
+    # print(f"Table Info: {table_info}")
     # Iterate through table_info to map columns dynamically
     for column in table_info["numeric"]:
         column_keywords[column] = generate_keywords(column, keyword_patterns)
@@ -40,6 +40,9 @@ def generate_column_keywords(table_info):
         column_keywords[column] = generate_keywords(column, keyword_patterns)
 
     for column in table_info["date"]:
+        column_keywords[column] = generate_keywords(column, keyword_patterns)
+
+    for column in table_info["others"]:
         column_keywords[column] = generate_keywords(column, keyword_patterns)
 
     return column_keywords
@@ -67,11 +70,6 @@ def initialize_patterns(connection, table_name, table_info):
     """Dynamically initialize patterns based on table schema."""
     global FIELD_MAPPING, PATTERNS, KNOWN_STORE_LOCATIONS
 
-    ## TO BE REMOVED
-    # Clear and reset globals
-    # FIELD_MAPPING.clear()
-    # KNOWN_STORE_LOCATIONS.clear()
-
     # Step 1: Gather table metrics
     # table_info = gather_metrics(connection, table_name)
     ## END TO BE REMOVED
@@ -83,10 +81,6 @@ def initialize_patterns(connection, table_name, table_info):
     for column, synonyms in column_keywords.items():
         for synonym in synonyms:
             FIELD_MAPPING[synonym] = column  # Map each synonym to its corresponding column
-
-    print(f"INVERTED FIELD MAPPING: \n {FIELD_MAPPING}")
-    # Debug: Ensure FIELD_MAPPING is populated before further usage
-    # print("Debug: Store location after synonym population:", KNOWN_STORE_LOCATIONS)
 
     # Step 3: Fetch dynamic fields (AFTER FIELD_MAPPING is populated)
     quantity_field = FIELD_MAPPING.get("quantity", "1")  # Fallback to default
@@ -124,17 +118,6 @@ def initialize_patterns(connection, table_name, table_info):
             "sql": "SELECT {field}, SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} GROUP BY {field};",
             "description": "This query retrieves the total sales amount for each store location."
         },
-
-        # "total_sales_by_date": {
-        #     "pattern": r".*total sales (in|on|for|during) ([\w\s,]+)",
-        #     "sql": {
-        #         "specific_date": "SELECT SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE transaction_date = '{specific_date}';",
-        #         "month": "SELECT SUM{quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE DATE_FORMAT(transaction_date, '%M') = '{month}';",
-        #         "month_year": "SELECT SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE DATE_FORMAT(transaction_date, '%M %Y') = '{month_year}';",
-        #         "year": "SELECT SUM({quantity_field} * {price_field}) AS total_sales FROM {table_name} WHERE YEAR(transaction_date) = {year};"
-        #     },
-        #     "description": "This query retrieves the total sales for a specific date, month, year, or timeframe."
-        # },
 
         "total_sales_by_date": {
             "pattern": r".*(total sales|songs released|tracks released) (in|on|for|during) ([\w\s,]+)",
@@ -225,12 +208,6 @@ def initialize_patterns(connection, table_name, table_info):
             "description": "This query calculates the average number of streams for each artist."
         },
 
-        # "student_with_highest_gpa": {
-        #     "pattern": r".*\b(student|students) with (the )?highest gpa\b",
-        #     "sql": "SELECT {name_field}, {score_field} FROM {table_name} WHERE {score_field} = (SELECT MAX({score_field}) FROM {table_name});",
-        #     "description": "This query retrieves the student with the highest GPA."
-        # },
-
         "top_students_with_highest_gpa": {
             "pattern": r".*\btop(?: (\d+))?\s+((students|student) with highest gpa|(students|student) by gpa|(students|student) with the best gpa)\b",
             "sql": "SELECT {name_field}, {score_field} FROM {table_name} ORDER BY {score_field} DESC LIMIT {limit};",
@@ -242,12 +219,6 @@ def initialize_patterns(connection, table_name, table_info):
             "sql": "SELECT {category_field}, AVG({gpa_field}) AS avg_gpa FROM {table_name} GROUP BY {category_field};",
             "description": "This query calculates the average GPA grouped by the specified category (department or year)."
         },
-
-        # "students_count_by_gender": {
-        #     "pattern": r".*(number of students by gender|students count grouped by gender|number of (male|female) students|how many (male|female) students)",
-        #     "sql": "SELECT {gender_field}, COUNT(*) AS student_count FROM {table_name} {where_clause} GROUP BY {gender_field};",
-        #     "description": "This query counts the number of students grouped by gender, or the count of specific genders if mentioned."
-        # },
 
         "students_count_by_gender_and_category": {
            "pattern": r".*(how many|count of)\s+(male|female)\s+students(?: in ([\w\s.]+))?(?: in department ([\w\s.]+))?(?: in year (\d+))?",

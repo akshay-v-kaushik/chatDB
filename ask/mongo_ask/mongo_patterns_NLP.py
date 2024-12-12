@@ -73,8 +73,8 @@ def initialize_patterns(db, collection_name, table_info):
             FIELD_MAPPING[synonym] = column  # Map each synonym to its corresponding column
 
     # REMOVE
-    print(FIELD_MAPPING)
-    print(KNOWN_STORE_LOCATIONS)
+    # print(FIELD_MAPPING)
+    # print(KNOWN_STORE_LOCATIONS)
     # Debug: Ensure FIELD_MAPPING is populated before further usage
     # print("Debug: FIELD_MAPPING after synonym population:", FIELD_MAPPING)
 
@@ -87,18 +87,12 @@ def initialize_patterns(db, collection_name, table_info):
     stream_field = FIELD_MAPPING.get("stream", "streams")
     name_field = FIELD_MAPPING.get("name", "artist_name")
     # Debug the fetched fields
-    print(f"Quantity Field: {quantity_field}, Price Field: {price_field}, Product Field: {product_field}, Location Field: {location_field}, Date Field: {date_field}")
+    # print(f"Quantity Field: {quantity_field}, Price Field: {price_field}, Product Field: {product_field}, Location Field: {location_field}, Date Field: {date_field}")
 
     # Define static patterns dynamically using the extracted fields
     static_patterns = {
 
-        # TODO: 1. count_by_category
         
-        #      4. average of entire dataset      /    IF you get one, you can replace for the others
-        #      5. total sales of entire dataset /
-        #      6. total sales by date and date_range
-        #      7. disinct values of a column
-
         "total_sales_by_field": {
             "pattern": r".*total (sales|revenue) (by|for each|for every) (\w+)",
             "mongodb": [
@@ -259,47 +253,7 @@ def initialize_patterns(db, collection_name, table_info):
             "description": "This query retrieves the total quantity and sales of a specific product."
         },
 
-        # --------------pattern works----------------
-
-        # "total_sales_by_store": {
-        #     "pattern": r".*total (revenue|sales) (for the store in|in) (\w+)",
-        #     "mongodb": [
-        #         {"$match": f"${location_field}"},  # Replace dynamically
-        #         {"$group": {
-        #             "_id": f"${location_field}",
-        #             "total_sales": {"$sum": {"$multiply": [f"${quantity_field}" if quantity_field != 1 else "1", 
-        #                                                    f"${FIELD_MAPPING.get('price', 'price_usd')}"]}}  # Replace dynamically
-        #         }}
-        #     ],
-        #     "description": "This query retrieves the total revenue for the store in {store}."
-        # },
-
-
-        # "quantity_by_category_in_location": {
-        #     "pattern": r".*quantity of products sold by category in (\w+(?:'?\w+)?)",
-        #     "mongodb": [
-        #         {"$match": {"store_location": "location"}},  # Replace dynamically
-        #         {"$group": {
-        #             "_id": "$product_category",  # Replace dynamically
-        #             "total_quantity": {"$sum": "$quantity_field"}  # Replace dynamically
-        #         }}
-        #     ],
-        #     "description": "This query retrieves the quantity of products sold by category in {location}."
-        # },
-
-# "quantity_by_category": {
-#     "pattern": r".*quantity of (\w+(?:'?\w+)?)",
-#     "mongodb": [
-#         {"$group": {
-#             "_id": "${GROUP_FIELD}",  # Replace dynamically
-#             "total_quantity": {"$sum": f"${quantity_field}"},  # Replace dynamically
-#             "total_sales": {"$sum": f"${quantity_field}"},  # Replace dynamically
-#             "product_names": {"$addToSet": "${name_field}"}  # Collect distinct product names
-#         }}
-#     ],
-#     "description": "This query retrieves the total quantity of products sold in {location}, along with distinct counts and projections."
-# },
-
+        
         "quantity_by_category": {
             "pattern": r".*quantity of (\w+(?:'?\w+)?)",
             "mongodb": [
@@ -414,7 +368,7 @@ def initialize_patterns(db, collection_name, table_info):
                     {
                         "$limit": 1 # // Limit the result to the top document
                     },
-                    {"$project": {f"{FIELD_MAPPING.get('product', "product")}": 1, "{FIELD_NAME}": 1, "_id": 0}}
+                    {"$project": {f"{FIELD_MAPPING.get('product', 'product')}": 1, "{FIELD_NAME}": 1, "_id": 0}}
             ],
             "description": "This query retrieves the most expensive product."
         },
@@ -428,7 +382,7 @@ def initialize_patterns(db, collection_name, table_info):
                     {
                         "$limit": 1 # // Limit the result to the top document
                     },
-                    {"$project": {f"{FIELD_MAPPING.get('product', "product")}": 1, "{FIELD_NAME}": 1, "_id": 0}}
+                    {"$project": {f"{FIELD_MAPPING.get('product', 'product')}": 1, "{FIELD_NAME}": 1, "_id": 0}}
             ],
             "description": "This query retrieves the most expensive product."
         },
@@ -464,48 +418,9 @@ def initialize_patterns(db, collection_name, table_info):
             "description": "This query retrieves the least expensive product."
         },
 
-    #     "most_streamed_artist": {
-    #         "pattern": r".*(most streamed|highest streamed) artist",
-    #         "mongodb": [
-    #             {"$group": {
-    #                 "_id": f"${name_field}",  # Replace dynamically
-    #                 "total_streams": {"$sum": f"${stream_field}"}  # Replace dynamically
-    #             }},
-    #             {"$sort": {"total_streams": -1}},
-    #             {"$limit": 1}
-    #         ],
-    #         "description": "This query retrieves the artist with the highest total streams."
-    #     }
     }
-
-    # Debug: Static patterns before updates
-    # print("Debug: Static Patterns before dynamic updates:", static_patterns)
-
-    # Step 4: Update PATTERNS dynamically
-    # updated_patterns = {}
-    # for pattern_key, pattern_details in static_patterns.items():
-    #     mongodb_query = pattern_details.get("mongodb", [])
-    #     updated_mongodb = []
-    #     for stage in mongodb_query:
-    #         if "$group" in stage:
-    #             group_stage = stage["$group"]
-    #             # group_stage["_id"] = f"${FIELD_MAPPING.get(group_stage.get('_id', '').replace('field', ''), '_id')}"
-    #             group_stage["total_sales"] = {
-    #                 "$sum": {
-    #                     "$multiply": [
-    #                         f"${FIELD_MAPPING.get('quantity', 1)}",
-    #                         f"${FIELD_MAPPING.get('price', 'price_usd')}"
-    #                     ]
-    #                 }
-    #             }
-    #         updated_mongodb.append(stage)
-    #     updated_patterns[pattern_key] = {**pattern_details, "mongodb": updated_mongodb}
 
     # Update PATTERNS globally
     PATTERNS.update(static_patterns)
 
-    # Debug: Final PATTERNS
-    # print("Debug: Final PATTERNS with MongoDB queries initialized.")
-    # print("FIELD_MAPPING:", FIELD_MAPPING)
-    # print("KNOWN_STORE_LOCATIONS:", KNOWN_STORE_LOCATIONS)
-
+    

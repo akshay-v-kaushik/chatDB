@@ -26,22 +26,18 @@ def run_cli(collection_name):
         print("Failed to connect to MongoDB. Exiting...")
         return
 
-    # collection_name = "spotify"  # Replace with your collection name
 
     # Check if the collection exists
     if collection_name not in db.list_collection_names():
         print(f"Collection '{collection_name}' does not exist in the database. Exiting...")
         return
 
-    # print(f"Connected to MongoDB. Using collection: {collection_name}")
 
     # Gather metrics for the collection
     table_info = gather_metrics(db, collection_name)
-    # REMOVE
-    pprint(KNOWN_STORE_LOCATIONS)
-    pprint(table_info)
-    # print(FIELD_MAPPING)
-    # Initialize query patterns for MongoDB
+   
+    # pprint(table_info)
+   
     try:
         initialize_patterns(db, collection_name, table_info)
         # print(FIELD_MAPPING)
